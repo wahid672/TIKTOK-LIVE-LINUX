@@ -184,6 +184,7 @@ class Streamer:
             return False, f"Failed to start virtual display: {e}"
 
         # 2. Launch Chrome Kiosk strictly on VIRTUAL_DISPLAY (:99)
+        # Always remove chrome_data_dir to ensure pristine profile with zero cached assets
         chrome_data_dir = "/tmp/tt-stream-overlay-chrome"
         try:
             shutil.rmtree(chrome_data_dir, ignore_errors=True)
@@ -208,6 +209,11 @@ class Streamer:
             "--disable-session-crashed-bubble",
             "--disable-component-update",
             "--force-device-scale-factor=1",
+            "--disk-cache-size=1",
+            "--media-cache-size=1",
+            "--disable-application-cache",
+            "--disable-gpu-program-cache",
+            "--disable-gpu-shader-disk-cache",
             overlay_url
         ]
 

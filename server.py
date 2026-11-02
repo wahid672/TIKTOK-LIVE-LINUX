@@ -4,16 +4,57 @@ Provides full web controls for standalone streaming without OBS
 and automated TikTok room creation.
 """
 import collections
+import glob
+import json
 import os
+import shutil
 import subprocess
 import time
 import urllib.parse
+from pathlib import Path
 from flask import Flask, jsonify, render_template, request
 from flask_cors import CORS
 import tiktok
 from streamer import Streamer
 
 PORT = int(os.environ.get("PORT", 8080))
+BASE_DIR = Path(__file__).resolve().parent
+SETTINGS_FILE = BASE_DIR / "settings.json"
+
+DEFAULT_SETTINGS = {
+    "title": "TikTok LIVE Broadcast",
+    "overlay_url": f"http://localhost:{PORT}/overlay",
+    "resolution": "720x1280",
+    "fps_bitrate": "30|2500",
+    "audio_source": "desktop"
+}
+
+def load_settings():
+    if SETTINGS_FILE.exists():
+        try:
+            with open(SETTINGS_FILE, "r", encoding="utf-8") as f:
+                saved = json.load(f)
+                return {**DEFAULT_SETTINGS, **saved}
+        except Exception as e:
+            print(f"Error loading settings: {e}")
+    return DEFAULT_SETTINGS.copy()
+
+def save_settings(data):
+    current = load_settings()
+    current.update({
+        "title": (data.get("title") or current["title"]).strip(),
+        "overlay_url": (data.get("overlay_url") or current["overlay_url"]).strip(),
+        "resolution": str(data.get("resolution") or current["resolution"]).strip(),
+        "fps_bitrate": str(data.get("fps_bitrate") or current["fps_bitrate"]).strip(),
+        "audio_source": str(data.get("audio_source") or current["audio_source"]).strip()
+    })
+    try:
+        with open(SETTINGS_FILE, "w", encoding="utf-8") as f:
+            json.dump(current, f, indent=2, ensure_ascii=False)
+        return True, "Pengaturan berhasil disimpan."
+    except Exception as e:
+        return False, str(e)
+
 app = Flask(__name__, static_folder="static", template_folder="templates")
 CORS(app)
 
@@ -52,6 +93,42 @@ def get_status():
         "port": PORT
     })
 
+@app.route("/api/settings", methods=["GET", "POST"])
+def handle_settings():
+    if request.method == "POST":
+        data = request.get_json() or {}
+        ok, msg = save_settings(data)
+        if ok:
+            log_event(f"Pengaturan disimpan: Judul='{data.get('title')}', Overlay='{data.get('overlay_url')}'")
+            return jsonify({"ok": True, "message": msg, "settings": load_settings()})
+        return jsonify({"ok": False, "error": msg}), 500
+    return jsonify({"ok": True, "settings": load_settings()})
+
+@app.route("/api/clear-cache", methods=["POST"])
+def handle_clear_cache():
+    log_event("Membersihkan temporary cache browser overlay...")
+    cleared = []
+    # Clear Chrome temp profile directories
+    for pattern in ["/tmp/tt-stream-overlay-chrome", "/tmp/stream-chrome*", "/tmp/.org.chromium.Chromium*"]:
+        try:
+            for p in glob.glob(pattern):
+                if os.path.isdir(p):
+                    shutil.rmtree(p, ignore_errors=True)
+                    cleared.append(p)
+                elif os.path.isfile(p):
+                    os.unlink(p)
+                    cleared.append(p)
+        except Exception as e:
+            log_event(f"Notice saat bersihkan cache {pattern}: {e}")
+
+    log_event("✓ Cache overlay berhasil dibersihkan.")
+    return jsonify({
+        "ok": True,
+        "message": "Cache overlay dan temporary browser profile berhasil dibersihkan.",
+        "cleared": cleared,
+        "timestamp": int(time.time() * 1000)
+    })
+
 @app.route("/api/audio-sources", methods=["GET"])
 def get_audio_sources():
     sources = streamer.list_audio_sources()
@@ -83,6 +160,15 @@ def start_stream():
     fps = int(data.get("fps") or 30)
     bitrate = int(data.get("bitrate") or 2500)
     audio_source = (data.get("audio_source") or "desktop").strip()
+
+    # Automatically save settings for persistence
+    save_settings({
+        "title": title,
+        "overlay_url": overlay_url,
+        "resolution": f"{width}x{height}",
+        "fps_bitrate": f"{fps}|{bitrate}",
+        "audio_source": audio_source
+    })
 
     log_event(f"Request to start LIVE: '{title}' with overlay: {overlay_url} (audio: {audio_source})")
 

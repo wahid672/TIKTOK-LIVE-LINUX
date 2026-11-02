@@ -303,8 +303,32 @@
                             <small class="form-hint">Pilih <strong>Suara Desktop</strong> agar suara musik dari YouTube, Spotify, tab browser lain, atau pemutar musik otomatis masuk ke siaran LIVE.</small>
                           </div>
 
+                          <!-- Settings & Cache Management Toolbar -->
+                          <div class="col-12 pt-1">
+                            <div class="d-flex flex-wrap gap-2 justify-content-between align-items-center p-2 rounded-2 bg-dark-subtle border border-secondary-subtle">
+                              <div class="d-flex align-items-center gap-2">
+                                <button type="button" class="btn btn-sm btn-primary d-flex align-items-center gap-1 shadow-sm" id="saveSettingsBtn" title="Simpan judul siaran, URL overlay, dan pengaturan saat ini">
+                                  <i class="ti ti-device-floppy fs-3"></i>
+                                  <span class="fw-semibold">Simpan Setingan</span>
+                                </button>
+                                <span class="badge bg-success-lt fs-6 d-none" id="saveStatusBadge">
+                                  <i class="ti ti-check me-1"></i> Setingan Tersimpan!
+                                </span>
+                              </div>
+                              <div class="d-flex align-items-center gap-2">
+                                <button type="button" class="btn btn-sm btn-outline-warning d-flex align-items-center gap-1 shadow-sm" id="clearCacheBtn" title="Hapus cache browser & refresh overlay agar perubahan CSS langsung diterapkan">
+                                  <i class="ti ti-broom fs-3"></i>
+                                  <span class="fw-semibold">Hapus Cache Overlay</span>
+                                </button>
+                                <span class="badge bg-warning-lt fs-6 d-none" id="clearCacheStatusBadge">
+                                  <i class="ti ti-sparkles me-1"></i> Cache Dibersihkan!
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+
                           <!-- Action Buttons -->
-                          <div class="col-12 pt-3">
+                          <div class="col-12 pt-2">
                             <!-- Start Button -->
                             <button type="button" id="startStreamBtn" class="btn btn-success btn-lg w-100 py-3 d-flex align-items-center justify-content-center gap-2 shadow-sm">
                               <i class="ti ti-rocket fs-2"></i>
@@ -368,16 +392,16 @@
                           <div class="col-md-6">
                             <div class="card card-sm border">
                               <div class="card-body">
-                                <div class="fw-bold mb-1"><i class="ti ti-volume text-info me-1"></i> Suara Desktop & Musik Lengkap</div>
-                                <div class="text-muted fs-6">Sistem menangkap output audio desktop secara otomatis. Musik dari Spotify, YouTube, tab browser lain, atau pemutar musik langsung masuk ke live.</div>
+                                <div class="fw-bold mb-1"><i class="ti ti-device-floppy text-primary me-1"></i> Simpan Setingan & Cache Buster</div>
+                                <div class="text-muted fs-6">Judul siaran dan URL overlay dapat disimpan permanen. Fitur Hapus Cache memastikan file CSS/JS overlay yang baru Anda edit langsung aktif tanpa tertahan cache.</div>
                               </div>
                             </div>
                           </div>
                           <div class="col-md-6">
                             <div class="card card-sm border">
                               <div class="card-body">
-                                <div class="fw-bold mb-1"><i class="ti ti-shield-check text-success me-1"></i> Tanpa Kebocoran Layar & Kursor</div>
-                                <div class="text-muted fs-6">Display virtual Xvfb :99 terisolasi dan opsi <code>show-pointer=false</code> memastikan kursor mouse dan layar pribadi tidak muncul di live.</div>
+                                <div class="fw-bold mb-1"><i class="ti ti-volume text-info me-1"></i> Suara Desktop & Musik Lengkap</div>
+                                <div class="text-muted fs-6">Sistem menangkap output audio desktop secara otomatis. Musik dari Spotify, YouTube, tab browser lain, atau pemutar musik langsung masuk ke live.</div>
                               </div>
                             </div>
                           </div>
@@ -387,7 +411,8 @@
                         <ol class="text-muted ps-3">
                           <li class="mb-1">Buka browser di Linux (Google Chrome atau Chromium) dan pastikan akun Anda sudah login di <strong>tiktok.com</strong>.</li>
                           <li class="mb-1">Tuliskan <strong>Judul Siaran</strong> dan tentukan <strong>URL Web Overlay</strong> yang ingin ditampilkan (atau gunakan bawaan).</li>
-                          <li class="mb-1">Pastikan <strong>Sumber Audio Siaran</strong> disetel ke <strong>Suara Desktop</strong> jika Anda ingin menyiarkan musik dari tab/browser lain.</li>
+                          <li class="mb-1">Klik tombol <strong>Simpan Setingan</strong> agar pengaturan Anda tersimpan secara otomatis setiap kali membuka dashboard.</li>
+                          <li class="mb-1">Jika Anda mengubah styling CSS pada overlay Anda, klik tombol <strong>Hapus Cache Overlay</strong> untuk memuat perubahan visual secara instan.</li>
                           <li class="mb-1">Klik tombol hijau <strong>Mulai Live Sekarang</strong>. GStreamer akan memulai siaran langsung ke TikTok.</li>
                           <li class="mb-1">Setelah selesai siaran, klik <strong>Akhiri Siaran Live</strong> agar room ditutup resmi di TikTok.</li>
                         </ol>
@@ -408,6 +433,9 @@
                     <h3 class="card-title fw-bold">Monitor Preview (9:16)</h3>
                   </div>
                   <div class="btn-group">
+                    <button type="button" class="btn btn-sm btn-outline-warning" id="previewClearCacheBtn" title="Hapus cache browser & reload CSS overlay terbaru">
+                      <i class="ti ti-broom me-1"></i> Hapus Cache
+                    </button>
                     <a id="openOverlayLink" href="/overlay" target="_blank" class="btn btn-sm btn-ghost-primary" title="Buka di tab baru">
                       <i class="ti ti-external-link"></i>
                     </a>

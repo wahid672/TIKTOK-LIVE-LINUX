@@ -26,3 +26,5 @@ Thumbs.db
 
 # TikTok local room state
 .active_room.json
+# User saved settings
+settings.json

@@ -25,6 +25,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const previewUrlLabel = document.getElementById('previewUrlLabel');
   const previewRoomMeta = document.getElementById('previewRoomMeta');
   const previewLiveBadge = document.getElementById('previewLiveBadge');
+  const previewClearCacheBtn = document.getElementById('previewClearCacheBtn');
 
   // Form & Action Buttons
   const streamTitle = document.getElementById('streamTitle');
@@ -37,6 +38,12 @@ document.addEventListener('DOMContentLoaded', () => {
   const navForceStopBtn = document.getElementById('navForceStopBtn');
   const forceStopStreamBtn = document.getElementById('forceStopStreamBtn');
   const refreshStatusBtn = document.getElementById('refreshStatusBtn');
+
+  // Save Settings & Clear Cache Buttons
+  const saveSettingsBtn = document.getElementById('saveSettingsBtn');
+  const saveStatusBadge = document.getElementById('saveStatusBadge');
+  const clearCacheBtn = document.getElementById('clearCacheBtn');
+  const clearCacheStatusBadge = document.getElementById('clearCacheStatusBadge');
 
   // Terminal & Logs
   const logsTerminal = document.getElementById('logsTerminal');
@@ -84,19 +91,29 @@ document.addEventListener('DOMContentLoaded', () => {
     return `${h}:${m}:${s}`;
   }
 
-  // 3. Preview URL Synchronizer
+  // 3. Preview URL Synchronizer & Cache Buster
   function getDefaultOverlayUrl() {
     return window.location.origin + '/overlay';
   }
 
-  function updatePreview() {
+  function buildCacheBustUrl(rawUrl) {
+    let url = (rawUrl || '').trim();
+    if (!url || url === 'https://www.tiktok.com') {
+      url = getDefaultOverlayUrl();
+    }
+    const sep = url.includes('?') ? '&' : '?';
+    return `${url}${sep}_cb=${Date.now()}`;
+  }
+
+  function updatePreview(cacheBust = false) {
     let url = (overlayUrl.value || '').trim();
     if (!url || url === 'https://www.tiktok.com') {
       url = getDefaultOverlayUrl();
       overlayUrl.value = url;
     }
-    previewIframe.src = url;
-    openOverlayLink.href = url;
+    const targetUrl = cacheBust ? buildCacheBustUrl(url) : url;
+    previewIframe.src = targetUrl;
+    openOverlayLink.href = targetUrl;
     if (previewUrlLabel) {
       previewUrlLabel.innerHTML = `Sumber: <span class="fw-semibold text-reset font-monospace">${escapeHtml(url)}</span>`;
     }
@@ -107,16 +124,138 @@ document.addEventListener('DOMContentLoaded', () => {
     updatePreview();
   });
 
-  reloadPreviewBtn?.addEventListener('click', updatePreview);
-  overlayUrl?.addEventListener('change', updatePreview);
+  reloadPreviewBtn?.addEventListener('click', () => updatePreview(false));
+  overlayUrl?.addEventListener('change', () => updatePreview(false));
 
-  // Set initial overlay URL if empty
-  if (!overlayUrl.value || overlayUrl.value.includes('tiktok.com')) {
-    overlayUrl.value = getDefaultOverlayUrl();
+  // 4. Save Settings Feature
+  async function saveSettingsAction() {
+    if (!saveSettingsBtn) return;
+    const title = (streamTitle.value || '').trim() || 'TikTok LIVE Broadcast';
+    const url = (overlayUrl.value || '').trim() || getDefaultOverlayUrl();
+    const resolution = streamResolution ? streamResolution.value : '720x1280';
+    const fps_bitrate = streamFps ? streamFps.value : '30|2500';
+    const audio_source = streamAudioSource ? streamAudioSource.value : 'desktop';
+
+    saveSettingsBtn.disabled = true;
+    saveSettingsBtn.innerHTML = `
+      <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+      <span>Menyimpan...</span>
+    `;
+
+    try {
+      const res = await fetch('/api/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title,
+          overlay_url: url,
+          resolution,
+          fps_bitrate,
+          audio_source
+        })
+      });
+      const data = await res.json();
+      if (data.ok) {
+        // Also save to localStorage as instant offline cache
+        localStorage.setItem('tiktok-live-settings', JSON.stringify({
+          title, overlay_url: url, resolution, fps_bitrate, audio_source
+        }));
+
+        if (saveStatusBadge) {
+          saveStatusBadge.classList.remove('d-none');
+          setTimeout(() => {
+            saveStatusBadge.classList.add('d-none');
+          }, 3500);
+        }
+      } else {
+        alert('Gagal menyimpan pengaturan: ' + (data.error || 'Unknown error'));
+      }
+    } catch (e) {
+      alert('Terjadi kesalahan saat menyimpan pengaturan: ' + e.message);
+    } finally {
+      saveSettingsBtn.disabled = false;
+      saveSettingsBtn.innerHTML = `
+        <i class="ti ti-device-floppy fs-3"></i>
+        <span class="fw-semibold">Simpan Setingan</span>
+      `;
+    }
   }
-  updatePreview();
 
-  // 4. Fetch Audio Sources
+  saveSettingsBtn?.addEventListener('click', saveSettingsAction);
+
+  // 5. Clear Cache Feature
+  async function clearCacheAction() {
+    const btns = [clearCacheBtn, previewClearCacheBtn].filter(Boolean);
+    btns.forEach(b => {
+      b.disabled = true;
+      b.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Membersihkan...';
+    });
+
+    try {
+      const res = await fetch('/api/clear-cache', { method: 'POST' });
+      const data = await res.json();
+
+      // Force reload preview with cache busting query param
+      updatePreview(true);
+
+      if (clearCacheStatusBadge) {
+        clearCacheStatusBadge.classList.remove('d-none');
+        setTimeout(() => {
+          clearCacheStatusBadge.classList.add('d-none');
+        }, 3500);
+      }
+      fetchLogs();
+    } catch (e) {
+      alert('Gagal membersihkan cache: ' + e.message);
+    } finally {
+      if (clearCacheBtn) {
+        clearCacheBtn.disabled = false;
+        clearCacheBtn.innerHTML = `
+          <i class="ti ti-broom fs-3"></i>
+          <span class="fw-semibold">Hapus Cache Overlay</span>
+        `;
+      }
+      if (previewClearCacheBtn) {
+        previewClearCacheBtn.disabled = false;
+        previewClearCacheBtn.innerHTML = `
+          <i class="ti ti-broom me-1"></i> Hapus Cache
+        `;
+      }
+    }
+  }
+
+  clearCacheBtn?.addEventListener('click', clearCacheAction);
+  previewClearCacheBtn?.addEventListener('click', clearCacheAction);
+
+  // 6. Load Saved Settings on Startup
+  async function loadSettingsOnStartup() {
+    try {
+      const res = await fetch('/api/settings');
+      const data = await res.json();
+      if (data.ok && data.settings) {
+        const s = data.settings;
+        if (s.title && streamTitle) streamTitle.value = s.title;
+        if (s.overlay_url && overlayUrl) overlayUrl.value = s.overlay_url;
+        if (s.resolution && streamResolution) streamResolution.value = s.resolution;
+        if (s.fps_bitrate && streamFps) streamFps.value = s.fps_bitrate;
+        if (s.audio_source && streamAudioSource) streamAudioSource.value = s.audio_source;
+        updatePreview(false);
+      }
+    } catch (e) {
+      // Fallback to localStorage
+      try {
+        const local = JSON.parse(localStorage.getItem('tiktok-live-settings') || '{}');
+        if (local.title && streamTitle) streamTitle.value = local.title;
+        if (local.overlay_url && overlayUrl) overlayUrl.value = local.overlay_url;
+        if (local.resolution && streamResolution) streamResolution.value = local.resolution;
+        if (local.fps_bitrate && streamFps) streamFps.value = local.fps_bitrate;
+        if (local.audio_source && streamAudioSource) streamAudioSource.value = local.audio_source;
+        updatePreview(false);
+      } catch (err) {}
+    }
+  }
+
+  // 7. Fetch Audio Sources
   async function loadAudioSources() {
     try {
       const res = await fetch('/api/audio-sources');
@@ -132,9 +271,8 @@ document.addEventListener('DOMContentLoaded', () => {
       // Keep static options if error
     }
   }
-  loadAudioSources();
 
-  // 5. Status Polling & UI Synchronization
+  // 8. Status Polling & UI Synchronization
   async function checkStatus() {
     try {
       const res = await fetch('/api/status');
@@ -242,7 +380,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  // 6. Fetch & Render Logs
+  // 9. Fetch & Render Logs
   async function fetchLogs() {
     try {
       const res = await fetch('/api/logs');
@@ -265,7 +403,7 @@ document.addEventListener('DOMContentLoaded', () => {
             lineClass += ' log-success';
           } else if (line.includes('Warning') || line.includes('warn') || line.includes('notice')) {
             lineClass += ' log-warn';
-          } else if (line.includes('Request') || line.includes('Starting') || line.includes('Audio capture')) {
+          } else if (line.includes('Request') || line.includes('Starting') || line.includes('Audio capture') || line.includes('Pengaturan disimpan') || line.includes('Cache overlay')) {
             lineClass += ' log-info';
           }
           return `<div class="${lineClass}">${escapeHtml(line)}</div>`;
@@ -288,7 +426,7 @@ document.addEventListener('DOMContentLoaded', () => {
     fetchLogs();
   });
 
-  // 7. Start Live Stream Action
+  // 10. Start Live Stream Action
   startStreamBtn?.addEventListener('click', async () => {
     const title = (streamTitle.value || '').trim() || 'TikTok LIVE Broadcast';
     const url = (overlayUrl.value || '').trim() || getDefaultOverlayUrl();
@@ -349,7 +487,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  // 8. Stop Live Stream Action
+  // 11. Stop Live Stream Action
   stopStreamBtn?.addEventListener('click', async () => {
     if (!confirm('Apakah Anda yakin ingin mengakhiri siaran langsung TikTok?')) return;
 
@@ -383,7 +521,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  // 9. Emergency Force Stop Action
+  // 12. Emergency Force Stop Action
   async function handleForceStop() {
     const confirmMsg = '⚠️ PAKSA HENTIKAN SIARAN (FORCE STOP)?\n\n' +
       'Tindakan ini akan:\n' +
@@ -437,7 +575,9 @@ document.addEventListener('DOMContentLoaded', () => {
       .replace(/'/g, '&#039;');
   }
 
-  // Initial Sync & Interval Polling
+  // Initial Startup Execution
+  loadSettingsOnStartup();
+  loadAudioSources();
   checkStatus();
   fetchLogs();
   setInterval(checkStatus, 2500);
