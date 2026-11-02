@@ -4,6 +4,12 @@ Uses an isolated virtual display (Xvfb :99) at exact vertical 720x1280 / 1080x19
 so that ONLY the clean web overlay is captured (no desktop leakage)
 and captures desktop/system audio (music, other browsers, YouTube, Spotify)
 streamed natively in 9:16 vertical orientation to TikTok LIVE.
+
+Optimized for long-duration streaming (3+ hours / 24/7) with:
+- Anti-throttling and memory leak guards for Chrome Kiosk
+- Hardware/System A/V clock drift prevention via videorate & audiorate
+- Zero-latency x264 rate control with keyframe header repetition
+- Monotonic timestamp enforcement and leaky buffer queues to prevent lag accumulation
 """
 import os
 import shutil
@@ -184,13 +190,16 @@ class Streamer:
             return False, f"Failed to start virtual display: {e}"
 
         # 2. Launch Chrome Kiosk strictly on VIRTUAL_DISPLAY (:99)
-        # Always remove chrome_data_dir to ensure pristine profile with zero cached assets
         chrome_data_dir = "/tmp/tt-stream-overlay-chrome"
         try:
             shutil.rmtree(chrome_data_dir, ignore_errors=True)
         except Exception:
             pass
 
+        # Chrome flags tuned for 24/7 non-stop streaming:
+        # - Disables background throttling so requestAnimationFrame and timers never drop frames
+        # - Disables /dev/shm usage to avoid shared memory exhaustion after hours
+        # - Disables disk/GPU shader caching to eliminate disk inflation
         chrome_cmd = [
             "google-chrome",
             "--kiosk",
@@ -214,6 +223,14 @@ class Streamer:
             "--disable-application-cache",
             "--disable-gpu-program-cache",
             "--disable-gpu-shader-disk-cache",
+            # Long-run anti-throttling & memory protection:
+            "--disable-background-timer-throttling",
+            "--disable-backgrounding-occluded-windows",
+            "--disable-renderer-backgrounding",
+            "--disable-dev-shm-usage",
+            "--disable-breakpad",
+            "--disable-ipc-flooding-protection",
+            "--js-flags=--max-old-space-size=512",
             overlay_url
         ]
 
@@ -242,16 +259,25 @@ class Streamer:
         self.log_cb(f"Audio capture initialized: '{audio_dev}' (Source: {self.audio_source})")
 
         # 4. GStreamer Pipeline capturing native 720x1280 / 1080x1920
-        # show-pointer=false prevents mouse cursor from appearing in the live broadcast
+        # Long-duration streaming stability optimizations:
+        # - flvmux enforce-increasing-timestamps=true: guarantees strictly monotonic timestamps (prevents TikTok buffer stalling)
+        # - videorate drop-only=true: keeps exact framerate by dropping late frames instead of queuing them up
+        # - audiorate tolerance=40000000: re-aligns audio samples to system clock (prevents hours-long A/V desync)
+        # - x264enc tune=zerolatency: eliminates encoder frame buildup
+        # - h264parse config-interval=1: repeats SPS/PPS headers at every keyframe for fast player recovery
+        # - leaky=downstream on queues: drops old frames in case of transient network congestion instead of lagging
         pipe_desc = (
-            f'flvmux name=mux streamable=true ! rtmp2sink location="{rtmp_url}" '
+            f'flvmux name=mux streamable=true enforce-increasing-timestamps=true ! '
+            f'queue max-size-time=2000000000 max-size-buffers=0 max-size-bytes=0 leaky=downstream ! '
+            f'rtmp2sink location="{rtmp_url}" sync=false '
             f'ximagesrc display-name={VIRTUAL_DISPLAY} show-pointer=false use-damage=0 ! '
-            f'videoconvert ! video/x-raw,format=I420,width={self.width},height={self.height},framerate={self.fps}/1 ! '
-            f'queue max-size-buffers=3 ! x264enc bitrate={self.bitrate} speed-preset=veryfast bframes=0 key-int-max={2 * self.fps} ! '
-            f'h264parse ! queue ! mux.video '
+            f'videoconvert ! videorate drop-only=true ! video/x-raw,format=I420,width={self.width},height={self.height},framerate={self.fps}/1 ! '
+            f'queue max-size-buffers=2 max-size-time=0 max-size-bytes=0 leaky=downstream ! '
+            f'x264enc bitrate={self.bitrate} speed-preset=veryfast tune=zerolatency bframes=0 key-int-max={2 * self.fps} ! '
+            f'h264parse config-interval=1 ! queue max-size-time=2000000000 max-size-buffers=0 max-size-bytes=0 leaky=downstream ! mux.video '
             f'pulsesrc device="{audio_dev}" provide-clock=false buffer-time=200000 latency-time=10000 ! '
-            f'audioconvert ! audioresample ! audio/x-raw,rate=48000,channels=2 ! '
-            f'audioconvert ! avenc_aac bitrate=160000 ! aacparse ! queue ! mux.audio'
+            f'audioconvert ! audioresample ! audiorate tolerance=40000000 ! audio/x-raw,rate=48000,channels=2 ! '
+            f'audioconvert ! avenc_aac bitrate=160000 ! aacparse ! queue max-size-time=2000000000 max-size-buffers=0 max-size-bytes=0 leaky=downstream ! mux.audio'
         )
 
         self.log_cb(f"Starting RTMP broadcast: {self.width}x{self.height} @ {self.fps}fps ({self.bitrate} kbps)...")
