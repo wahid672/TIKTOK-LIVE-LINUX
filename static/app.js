@@ -31,6 +31,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const overlayUrl = document.getElementById('overlayUrl');
   const streamResolution = document.getElementById('streamResolution');
   const streamFps = document.getElementById('streamFps');
+  const streamAudioSource = document.getElementById('streamAudioSource');
   const startStreamBtn = document.getElementById('startStreamBtn');
   const stopStreamBtn = document.getElementById('stopStreamBtn');
   const navForceStopBtn = document.getElementById('navForceStopBtn');
@@ -115,7 +116,25 @@ document.addEventListener('DOMContentLoaded', () => {
   }
   updatePreview();
 
-  // 4. Status Polling & UI Synchronization
+  // 4. Fetch Audio Sources
+  async function loadAudioSources() {
+    try {
+      const res = await fetch('/api/audio-sources');
+      const data = await res.json();
+      if (data.ok && Array.isArray(data.sources) && streamAudioSource) {
+        const currentVal = streamAudioSource.value;
+        streamAudioSource.innerHTML = data.sources.map(s => {
+          const selected = s.id === currentVal ? 'selected' : (s.default && !currentVal ? 'selected' : '');
+          return `<option value="${escapeHtml(s.id)}" ${selected}>${escapeHtml(s.name)}</option>`;
+        }).join('');
+      }
+    } catch (e) {
+      // Keep static options if error
+    }
+  }
+  loadAudioSources();
+
+  // 5. Status Polling & UI Synchronization
   async function checkStatus() {
     try {
       const res = await fetch('/api/status');
@@ -165,7 +184,8 @@ document.addEventListener('DOMContentLoaded', () => {
         // Encoder Card
         cardEncoderStatus.textContent = 'LIVE STREAMING';
         cardEncoderStatus.className = 'fs-3 fw-bold text-truncate text-danger';
-        cardEncoderDetails.textContent = `Mengalir ke RTMP TikTok`;
+        const audioDevStr = streamer.active_audio_device ? ` • Audio: ${streamer.active_audio_device}` : '';
+        cardEncoderDetails.textContent = `Mengalir ke RTMP${audioDevStr}`;
         cardEncoderIconBg.className = 'avatar bg-danger text-white rounded-3';
 
         // Quality Card
@@ -222,7 +242,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  // 5. Fetch & Render Logs
+  // 6. Fetch & Render Logs
   async function fetchLogs() {
     try {
       const res = await fetch('/api/logs');
@@ -245,7 +265,7 @@ document.addEventListener('DOMContentLoaded', () => {
             lineClass += ' log-success';
           } else if (line.includes('Warning') || line.includes('warn') || line.includes('notice')) {
             lineClass += ' log-warn';
-          } else if (line.includes('Request') || line.includes('Starting')) {
+          } else if (line.includes('Request') || line.includes('Starting') || line.includes('Audio capture')) {
             lineClass += ' log-info';
           }
           return `<div class="${lineClass}">${escapeHtml(line)}</div>`;
@@ -268,12 +288,13 @@ document.addEventListener('DOMContentLoaded', () => {
     fetchLogs();
   });
 
-  // 6. Start Live Stream Action
+  // 7. Start Live Stream Action
   startStreamBtn?.addEventListener('click', async () => {
     const title = (streamTitle.value || '').trim() || 'TikTok LIVE Broadcast';
     const url = (overlayUrl.value || '').trim() || getDefaultOverlayUrl();
     const [w, h] = streamResolution.value.split('x').map(Number);
     const [fps, bitrate] = streamFps.value.split('|').map(Number);
+    const audioSource = streamAudioSource ? streamAudioSource.value : 'desktop';
 
     startStreamBtn.disabled = true;
     startStreamBtn.innerHTML = `
@@ -291,7 +312,8 @@ document.addEventListener('DOMContentLoaded', () => {
           width: w,
           height: h,
           fps,
-          bitrate
+          bitrate,
+          audio_source: audioSource
         })
       });
 
@@ -327,7 +349,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  // 7. Stop Live Stream Action
+  // 8. Stop Live Stream Action
   stopStreamBtn?.addEventListener('click', async () => {
     if (!confirm('Apakah Anda yakin ingin mengakhiri siaran langsung TikTok?')) return;
 
@@ -361,7 +383,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  // 8. Emergency Force Stop Action
+  // 9. Emergency Force Stop Action
   async function handleForceStop() {
     const confirmMsg = '⚠️ PAKSA HENTIKAN SIARAN (FORCE STOP)?\n\n' +
       'Tindakan ini akan:\n' +

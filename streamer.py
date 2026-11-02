@@ -2,7 +2,8 @@
 """GStreamer-based standalone RTMP streamer for TikTok LIVE.
 Uses an isolated virtual display (Xvfb :99) at exact vertical 720x1280 / 1080x1920
 so that ONLY the clean web overlay is captured (no desktop leakage)
-and streamed natively in 9:16 vertical orientation to TikTok LIVE.
+and captures desktop/system audio (music, other browsers, YouTube, Spotify)
+streamed natively in 9:16 vertical orientation to TikTok LIVE.
 """
 import os
 import shutil
@@ -15,9 +16,23 @@ from gi.repository import Gst
 
 Gst.init(None)
 
-# Ensure PulseAudio socket is set
-if "PULSE_SERVER" not in os.environ:
-    os.environ["PULSE_SERVER"] = "unix:/run/user/1000/pulse/native"
+def _setup_pulse_env():
+    """Dynamically discover and set PulseAudio/PipeWire socket."""
+    if "PULSE_SERVER" not in os.environ:
+        candidates = []
+        xdg = os.environ.get("XDG_RUNTIME_DIR")
+        if xdg:
+            candidates.append(os.path.join(xdg, "pulse", "native"))
+        if hasattr(os, "getuid"):
+            candidates.append(f"/run/user/{os.getuid()}/pulse/native")
+        candidates.append("/run/user/1000/pulse/native")
+
+        for cand in candidates:
+            if os.path.exists(cand):
+                os.environ["PULSE_SERVER"] = f"unix:{cand}"
+                break
+
+_setup_pulse_env()
 
 VIRTUAL_DISPLAY = ":99"
 
@@ -36,10 +51,84 @@ class Streamer:
         self.height = 1280
         self.fps = 30
         self.bitrate = 2500
+        self.audio_source = "desktop"
+        self.active_audio_device = None
         self.error = None
 
     def _default_log(self, msg):
         print(f"[Streamer] {msg}")
+
+    def resolve_audio_device(self, source_choice="desktop"):
+        """Resolves the audio capture device.
+        When set to 'desktop' (default), automatically detects the active default
+        sound output (sink monitor) so that ALL sounds (other browsers, YouTube,
+        Spotify, music players, games) are captured seamlessly.
+        """
+        source_choice = (source_choice or "desktop").strip()
+
+        # If user passed a specific device name directly
+        if source_choice not in ("desktop", "auto", "virtual", "mic", ""):
+            return source_choice
+
+        if source_choice in ("desktop", "auto", ""):
+            # 1. Try pactl get-default-sink
+            try:
+                r = subprocess.run(["pactl", "get-default-sink"], capture_output=True, text=True, timeout=2)
+                if r.returncode == 0 and r.stdout.strip():
+                    sink = r.stdout.strip()
+                    return f"{sink}.monitor"
+            except Exception:
+                pass
+
+            # 2. Try pactl info
+            try:
+                r = subprocess.run(["pactl", "info"], capture_output=True, text=True, timeout=2)
+                for line in r.stdout.splitlines():
+                    if "Default Sink:" in line:
+                        sink = line.split("Default Sink:", 1)[1].strip()
+                        if sink:
+                            return f"{sink}.monitor"
+            except Exception:
+                pass
+
+            # 3. Check pactl list short sources for any active monitor
+            try:
+                r = subprocess.run(["pactl", "list", "short", "sources"], capture_output=True, text=True, timeout=2)
+                monitors = []
+                for line in r.stdout.splitlines():
+                    parts = line.split()
+                    if len(parts) >= 2 and parts[1].endswith(".monitor"):
+                        monitors.append(parts[1])
+                
+                # Prefer real hardware monitor over virtual sink if present
+                real_monitors = [m for m in monitors if "Virtual_Sink" not in m]
+                if real_monitors:
+                    return real_monitors[0]
+                if monitors:
+                    return monitors[0]
+            except Exception:
+                pass
+
+            # PulseAudio default sink monitor fallback
+            return "@DEFAULT_SINK@.monitor"
+
+        elif source_choice == "virtual":
+            return "Virtual_Sink.monitor"
+
+        elif source_choice == "mic":
+            return "@DEFAULT_SOURCE@"
+
+        return "@DEFAULT_SINK@.monitor"
+
+    def list_audio_sources(self):
+        """Returns detected audio sources for the UI."""
+        default_monitor = self.resolve_audio_device("desktop")
+        sources = [
+            {"id": "desktop", "name": f"Suara Desktop / Musik & Browser Lain ({default_monitor})", "default": True},
+            {"id": "virtual", "name": "Virtual Audio Sink (Virtual_Sink.monitor)", "default": False},
+            {"id": "mic", "name": "Mikrofon Sistem (@DEFAULT_SOURCE@)", "default": False}
+        ]
+        return sources
 
     def get_status(self):
         duration = 0
@@ -53,6 +142,8 @@ class Streamer:
             "fps": self.fps,
             "bitrate": self.bitrate,
             "overlay_url": self.overlay_url,
+            "audio_source": self.audio_source,
+            "active_audio_device": self.active_audio_device,
             "room_id": self.current_room.get("room_id") if self.current_room else None,
             "stream_title": self.current_room.get("title") if self.current_room else None,
             "error": self.error
@@ -66,7 +157,7 @@ class Streamer:
                 except Exception:
                     pass
 
-    def start(self, rtmp_url, overlay_url, room_info=None, width=720, height=1280, fps=30, bitrate=2500):
+    def start(self, rtmp_url, overlay_url, room_info=None, width=720, height=1280, fps=30, bitrate=2500, audio_source="desktop"):
         if self.is_streaming:
             self.log_cb("Already streaming!")
             return False, "Already streaming"
@@ -76,6 +167,7 @@ class Streamer:
         self.height = int(height)
         self.fps = int(fps)
         self.bitrate = int(bitrate)
+        self.audio_source = audio_source or "desktop"
         self.rtmp_url = rtmp_url
         self.overlay_url = overlay_url
         self.current_room = room_info or {}
@@ -122,7 +214,7 @@ class Streamer:
         self.log_cb(f"Rendering overlay ({overlay_url}) on {VIRTUAL_DISPLAY} in kiosk mode...")
         env = os.environ.copy()
         env["DISPLAY"] = VIRTUAL_DISPLAY
-        env["PULSE_SERVER"] = "unix:/run/user/1000/pulse/native"
+        _setup_pulse_env()
         try:
             self.chrome_proc = subprocess.Popen(chrome_cmd, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             time.sleep(3.5)  # Allow page to fully render
@@ -138,15 +230,20 @@ class Streamer:
         except Exception:
             pass
 
-        # 3. GStreamer Pipeline capturing native 720x1280 / 1080x1920
-        # NOTE: show-pointer=false is crucial to prevent the X11 mouse cursor from being painted onto the live stream!
+        # 3. Resolve Audio Device (Default Sink Monitor for desktop/music capture)
+        audio_dev = self.resolve_audio_device(self.audio_source)
+        self.active_audio_device = audio_dev
+        self.log_cb(f"Audio capture initialized: '{audio_dev}' (Source: {self.audio_source})")
+
+        # 4. GStreamer Pipeline capturing native 720x1280 / 1080x1920
+        # show-pointer=false prevents mouse cursor from appearing in the live broadcast
         pipe_desc = (
             f'flvmux name=mux streamable=true ! rtmp2sink location="{rtmp_url}" '
             f'ximagesrc display-name={VIRTUAL_DISPLAY} show-pointer=false use-damage=0 ! '
             f'videoconvert ! video/x-raw,format=I420,width={self.width},height={self.height},framerate={self.fps}/1 ! '
             f'queue max-size-buffers=3 ! x264enc bitrate={self.bitrate} speed-preset=veryfast bframes=0 key-int-max={2 * self.fps} ! '
             f'h264parse ! queue ! mux.video '
-            f'pulsesrc device="Virtual_Sink.monitor" provide-clock=false buffer-time=200000 latency-time=10000 ! '
+            f'pulsesrc device="{audio_dev}" provide-clock=false buffer-time=200000 latency-time=10000 ! '
             f'audioconvert ! audioresample ! audio/x-raw,rate=48000,channels=2 ! '
             f'audioconvert ! avenc_aac bitrate=160000 ! aacparse ! queue ! mux.audio'
         )
@@ -168,7 +265,7 @@ class Streamer:
 
             self.is_streaming = True
             self.start_time = time.time()
-            self.log_cb(f"Native Vertical Live Stream started! (Room ID: {self.current_room.get('room_id', 'N/A')})")
+            self.log_cb(f"Native Vertical Live Stream started! (Room ID: {self.current_room.get('room_id', 'N/A')}, Audio: {audio_dev})")
             return True, "Streaming started"
         except Exception as e:
             self.stop()
@@ -223,5 +320,6 @@ class Streamer:
 
         self._cleanup_locks()
         self.start_time = None
+        self.active_audio_device = None
         self.log_cb("Live broadcast stopped cleanly.")
         return True

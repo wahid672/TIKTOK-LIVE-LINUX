@@ -52,6 +52,14 @@ def get_status():
         "port": PORT
     })
 
+@app.route("/api/audio-sources", methods=["GET"])
+def get_audio_sources():
+    sources = streamer.list_audio_sources()
+    return jsonify({
+        "ok": True,
+        "sources": sources
+    })
+
 @app.route("/api/logs", methods=["GET"])
 def get_logs():
     return jsonify({
@@ -74,8 +82,9 @@ def start_stream():
     height = int(data.get("height") or 1280)
     fps = int(data.get("fps") or 30)
     bitrate = int(data.get("bitrate") or 2500)
+    audio_source = (data.get("audio_source") or "desktop").strip()
 
-    log_event(f"Request to start LIVE: '{title}' with overlay: {overlay_url}")
+    log_event(f"Request to start LIVE: '{title}' with overlay: {overlay_url} (audio: {audio_source})")
 
     # Check TikTok session first
     session = tiktok.session_status()
@@ -103,7 +112,8 @@ def start_stream():
         width=width,
         height=height,
         fps=fps,
-        bitrate=bitrate
+        bitrate=bitrate,
+        audio_source=audio_source
     )
 
     if not success:
