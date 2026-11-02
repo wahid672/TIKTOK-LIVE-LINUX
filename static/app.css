@@ -1,0 +1,212 @@
+/* ==============================================================================
+   TikTok LIVE Studio - Custom Tabler Overrides & Stream Component Styles
+   ============================================================================== */
+
+/* Font setup */
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  letter-spacing: -0.01em;
+}
+
+.font-monospace {
+  font-family: 'JetBrains Mono', SFMono-Regular, Menlo, Monaco, Consolas, monospace !important;
+}
+
+/* Status dots animations */
+.status-dot-animated.status-green {
+  background-color: #2fb344;
+  box-shadow: 0 0 0 0 rgba(47, 179, 68, 0.7);
+  animation: pulse-green 1.8s infinite;
+}
+
+.status-dot-animated.status-yellow {
+  background-color: #f59f00;
+  box-shadow: 0 0 0 0 rgba(245, 159, 0, 0.7);
+  animation: pulse-yellow 1.8s infinite;
+}
+
+.status-dot-animated.status-red {
+  background-color: #d63939;
+  box-shadow: 0 0 0 0 rgba(214, 57, 57, 0.7);
+  animation: pulse-red 1.5s infinite;
+}
+
+@keyframes pulse-green {
+  0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(47, 179, 68, 0.7); }
+  70% { transform: scale(1); box-shadow: 0 0 0 6px rgba(47, 179, 68, 0); }
+  100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(47, 179, 68, 0); }
+}
+
+@keyframes pulse-yellow {
+  0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(245, 159, 0, 0.7); }
+  70% { transform: scale(1); box-shadow: 0 0 0 6px rgba(245, 159, 0, 0); }
+  100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(245, 159, 0, 0); }
+}
+
+@keyframes pulse-red {
+  0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(214, 57, 57, 0.8); }
+  70% { transform: scale(1); box-shadow: 0 0 0 8px rgba(214, 57, 57, 0); }
+  100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(214, 57, 57, 0); }
+}
+
+/* ==============================================================================
+   9:16 Smartphone Mockup Preview Frame
+   ============================================================================== */
+.phone-mockup {
+  position: relative;
+  width: 280px;
+  height: 498px; /* Exact 9:16 proportion for 280px width */
+  background: #11141c;
+  border: 10px solid #202636;
+  border-radius: 36px;
+  box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.6), inset 0 0 0 2px rgba(255, 255, 255, 0.1);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+[data-bs-theme="light"] .phone-mockup {
+  background: #0f172a;
+  border-color: #cbd5e1;
+  box-shadow: 0 20px 40px -15px rgba(100, 116, 139, 0.3), inset 0 0 0 2px rgba(0, 0, 0, 0.05);
+}
+
+/* Notch & speaker bar */
+.phone-notch {
+  position: absolute;
+  top: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 90px;
+  height: 18px;
+  background: #202636;
+  border-radius: 12px;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+[data-bs-theme="light"] .phone-notch {
+  background: #cbd5e1;
+}
+
+.phone-speaker {
+  width: 32px;
+  height: 4px;
+  background: #334155;
+  border-radius: 4px;
+}
+
+.phone-camera {
+  width: 8px;
+  height: 8px;
+  background: #1e293b;
+  border: 1.5px solid #475569;
+  border-radius: 50%;
+}
+
+/* Phone screen container */
+.phone-screen {
+  flex: 1;
+  width: 100%;
+  height: 100%;
+  background: #090d16;
+  position: relative;
+  overflow: hidden;
+}
+
+.phone-screen iframe {
+  width: 100%;
+  height: 100%;
+  border: none;
+  display: block;
+  background: #05070d;
+}
+
+/* Phone Home Indicator Bar */
+.phone-home-indicator {
+  position: absolute;
+  bottom: 6px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 80px;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.4);
+  border-radius: 4px;
+  z-index: 10;
+  pointer-events: none;
+}
+
+/* ==============================================================================
+   Terminal Console
+   ============================================================================== */
+.terminal-console {
+  background-color: #0b0f19;
+  color: #e2e8f0;
+  font-family: 'JetBrains Mono', SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.85rem;
+  height: 380px;
+  overflow-y: auto;
+  line-height: 1.6;
+  border-color: #1e293b !important;
+}
+
+[data-bs-theme="light"] .terminal-console {
+  background-color: #0f172a;
+  color: #f1f5f9;
+}
+
+.terminal-console::-webkit-scrollbar {
+  width: 6px;
+}
+
+.terminal-console::-webkit-scrollbar-track {
+  background: #0b0f19;
+}
+
+.terminal-console::-webkit-scrollbar-thumb {
+  background: #334155;
+  border-radius: 3px;
+}
+
+.terminal-console .log-line {
+  padding: 2px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+  word-break: break-all;
+}
+
+.terminal-console .log-time {
+  color: #64748b;
+  margin-right: 8px;
+}
+
+.terminal-console .log-error {
+  color: #f87171;
+  font-weight: 600;
+}
+
+.terminal-console .log-success {
+  color: #4ade80;
+  font-weight: 600;
+}
+
+.terminal-console .log-warn {
+  color: #fbbf24;
+}
+
+.terminal-console .log-info {
+  color: #38bdf8;
+}
+
+/* Button pulse on live */
+.btn-live-pulse {
+  animation: live-button-glow 2s infinite;
+}
+
+@keyframes live-button-glow {
+  0% { box-shadow: 0 0 0 0 rgba(214, 57, 57, 0.6); }
+  70% { box-shadow: 0 0 0 10px rgba(214, 57, 57, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(214, 57, 57, 0); }
+}

@@ -1,0 +1,470 @@
+<!doctype html>
+<html lang="id" data-bs-theme="dark">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
+  <meta http-equiv="X-UA-Compatible" content="ie=edge"/>
+  <title>TikTok LIVE Studio - Standalone RTMP Dashboard</title>
+
+  <!-- Google Fonts: Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+  <!-- Tabler Core CSS -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/core@1.0.0-beta20/dist/css/tabler.min.css"/>
+  <!-- Tabler Icons -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.47.0/tabler-icons.min.css"/>
+
+  <!-- Custom App Overrides -->
+  <link rel="stylesheet" href="/static/app.css"/>
+</head>
+<body class="d-flex flex-column layout-fluid">
+  <div class="page">
+    <!-- Navbar Header -->
+    <header class="navbar navbar-expand-md d-print-none sticky-top border-bottom">
+      <div class="container-xl">
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar-menu" aria-controls="navbar-menu" aria-expanded="false" aria-label="Toggle navigation">
+          <span class="navbar-toggler-icon"></span>
+        </button>
+        
+        <!-- Brand -->
+        <h1 class="navbar-brand navbar-brand-autodark d-none-navbar-horizontal pe-0 pe-md-3">
+          <a href="/" class="d-flex align-items-center gap-2 text-decoration-none">
+            <span class="avatar avatar-sm bg-primary-lt text-primary rounded-3">
+              <i class="ti ti-brand-tiktok fs-2"></i>
+            </span>
+            <div class="d-flex flex-column">
+              <span class="fw-bold fs-3 text-reset lh-1">TikTok LIVE Studio</span>
+              <span class="fs-6 text-muted lh-1 mt-1">Standalone RTMP Engine</span>
+            </div>
+          </a>
+        </h1>
+
+        <!-- Navbar Right Items -->
+        <div class="navbar-nav flex-row order-md-last align-items-center gap-2">
+          <!-- Theme Toggle -->
+          <button id="themeToggleBtn" type="button" class="btn btn-icon btn-ghost-secondary rounded-circle" title="Ganti Tema (Dark/Light)">
+            <i class="ti ti-sun fs-2 d-none" id="themeIconSun"></i>
+            <i class="ti ti-moon fs-2" id="themeIconMoon"></i>
+          </button>
+
+          <!-- TikTok Login Status Badge -->
+          <div class="nav-item d-none d-sm-flex">
+            <div id="tiktokStatusBadge" class="badge bg-secondary-lt d-flex align-items-center gap-2 px-3 py-2 fs-5">
+              <span class="status-dot status-dot-animated status-yellow"></span>
+              <span class="status-label">Mengecek TikTok...</span>
+            </div>
+          </div>
+
+          <!-- Broadcast Status Badge -->
+          <div class="nav-item">
+            <div id="streamStatusBadge" class="badge bg-secondary-lt d-flex align-items-center gap-2 px-3 py-2 fs-5">
+              <span class="status-dot status-gray"></span>
+              <span class="status-label">OFFLINE</span>
+            </div>
+          </div>
+
+          <!-- Stream Timer Badge -->
+          <div class="nav-item">
+            <div class="badge bg-dark text-white border border-secondary-subtle d-flex align-items-center gap-2 px-3 py-2 fs-5 font-monospace">
+              <i class="ti ti-clock fs-4 text-warning"></i>
+              <span id="streamTimer">00:00:00</span>
+            </div>
+          </div>
+
+          <!-- Quick Force Stop Button -->
+          <div class="nav-item ms-1">
+            <button type="button" class="btn btn-outline-danger btn-sm d-flex align-items-center gap-1" id="navForceStopBtn" title="Paksa matikan siaran dan tutup room TikTok">
+              <i class="ti ti-bolt fs-3"></i>
+              <span class="d-none d-md-inline fw-semibold">Force Stop</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <div class="page-wrapper">
+      <!-- Page Header -->
+      <div class="page-header d-print-none py-3">
+        <div class="container-xl">
+          <div class="row g-2 align-items-center">
+            <div class="col">
+              <div class="page-pretitle text-uppercase fw-semibold text-primary">
+                GStreamer Broadcast Engine
+              </div>
+              <h2 class="page-title fs-2 fw-bold">
+                Dashboard Kontrol Siaran
+              </h2>
+            </div>
+            <div class="col-auto ms-auto d-print-none">
+              <div class="btn-list">
+                <span class="d-none d-sm-inline">
+                  <a href="https://www.tiktok.com/live" target="_blank" class="btn btn-ghost-secondary">
+                    <i class="ti ti-external-link me-1"></i> Buka TikTok LIVE
+                  </a>
+                </span>
+                <button type="button" class="btn btn-primary d-none d-sm-inline-flex" id="refreshStatusBtn">
+                  <i class="ti ti-refresh me-1"></i> Refresh Status
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Page Body -->
+      <div class="page-body mt-2">
+        <div class="container-xl">
+          
+          <!-- Top Metric Cards -->
+          <div class="row row-deck row-cards mb-3">
+            <!-- Card 1: TikTok Account -->
+            <div class="col-sm-6 col-lg-3">
+              <div class="card card-sm">
+                <div class="card-body">
+                  <div class="row align-items-center">
+                    <div class="col-auto">
+                      <span class="avatar bg-primary text-white rounded-3">
+                        <i class="ti ti-user-check fs-2"></i>
+                      </span>
+                    </div>
+                    <div class="col">
+                      <div class="font-weight-medium text-muted fs-5">Sesi Akun TikTok</div>
+                      <div class="fs-3 fw-bold text-truncate" id="cardTiktokAccount">Memeriksa...</div>
+                      <div class="text-muted fs-6" id="cardTiktokExpiry">-</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Card 2: Encoder Status -->
+            <div class="col-sm-6 col-lg-3">
+              <div class="card card-sm">
+                <div class="card-body">
+                  <div class="row align-items-center">
+                    <div class="col-auto">
+                      <span class="avatar bg-success text-white rounded-3" id="cardEncoderIconBg">
+                        <i class="ti ti-broadcast fs-2" id="cardEncoderIcon"></i>
+                      </span>
+                    </div>
+                    <div class="col">
+                      <div class="font-weight-medium text-muted fs-5">Status Siaran</div>
+                      <div class="fs-3 fw-bold text-truncate" id="cardEncoderStatus">OFFLINE</div>
+                      <div class="text-muted fs-6" id="cardEncoderDetails">GStreamer Siap</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Card 3: Quality & FPS -->
+            <div class="col-sm-6 col-lg-3">
+              <div class="card card-sm">
+                <div class="card-body">
+                  <div class="row align-items-center">
+                    <div class="col-auto">
+                      <span class="avatar bg-info text-white rounded-3">
+                        <i class="ti ti-video fs-2"></i>
+                      </span>
+                    </div>
+                    <div class="col">
+                      <div class="font-weight-medium text-muted fs-5">Format Video</div>
+                      <div class="fs-3 fw-bold text-truncate" id="cardResolution">720 × 1280 (9:16)</div>
+                      <div class="text-muted fs-6" id="cardFpsBitrate">30 FPS • 2500 Kbps</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Card 4: Active Room ID -->
+            <div class="col-sm-6 col-lg-3">
+              <div class="card card-sm">
+                <div class="card-body">
+                  <div class="row align-items-center">
+                    <div class="col-auto">
+                      <span class="avatar bg-purple text-white rounded-3">
+                        <i class="ti ti-id fs-2"></i>
+                      </span>
+                    </div>
+                    <div class="col">
+                      <div class="font-weight-medium text-muted fs-5">Room ID TikTok</div>
+                      <div class="fs-3 fw-bold font-monospace text-truncate" id="cardRoomId">Tidak Ada</div>
+                      <div class="text-muted fs-6" id="cardRoomStatus">Standby</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Main Layout: Controls & Preview -->
+          <div class="row row-cards">
+            <!-- Left Column: Tabs (Controls, Terminal Logs, Guide) -->
+            <div class="col-lg-7">
+              <div class="card">
+                <!-- Card Nav Tabs -->
+                <div class="card-header">
+                  <ul class="nav nav-tabs card-header-tabs" data-bs-toggle="tabs" role="tablist">
+                    <li class="nav-item" role="presentation">
+                      <a href="#tab-stream" class="nav-link active d-flex align-items-center gap-2" data-bs-toggle="tab" aria-selected="true" role="tab">
+                        <i class="ti ti-settings fs-3"></i>
+                        <span>Pengaturan & Kontrol Siaran</span>
+                      </a>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                      <a href="#tab-logs" class="nav-link d-flex align-items-center gap-2" data-bs-toggle="tab" aria-selected="false" role="tab" tabindex="-1">
+                        <i class="ti ti-terminal-2 fs-3"></i>
+                        <span>Terminal Logs</span>
+                        <span class="badge bg-secondary-lt ms-1" id="logBadgeCount">0</span>
+                      </a>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                      <a href="#tab-guide" class="nav-link d-flex align-items-center gap-2" data-bs-toggle="tab" aria-selected="false" role="tab" tabindex="-1">
+                        <i class="ti ti-help-circle fs-3"></i>
+                        <span>Panduan & Info</span>
+                      </a>
+                    </li>
+                  </ul>
+                </div>
+
+                <div class="card-body">
+                  <div class="tab-content">
+                    
+                    <!-- Tab 1: Stream Control Form -->
+                    <div class="tab-pane active show" id="tab-stream" role="tabpanel">
+                      <form id="streamForm" onsubmit="return false;">
+                        <div class="row g-3">
+                          <!-- Live Title -->
+                          <div class="col-12">
+                            <label class="form-label required fw-semibold" for="streamTitle">
+                              <i class="ti ti-typography me-1 text-primary"></i> Judul Siaran TikTok
+                            </label>
+                            <input type="text" id="streamTitle" class="form-control form-control-lg" placeholder="Contoh: Live Santai & Interaktif" value="TikTok LIVE Broadcast" required>
+                            <small class="form-hint">Judul ini akan otomatis didaftarkan ke server TikTok LIVE saat siaran dimulai.</small>
+                          </div>
+
+                          <!-- Overlay URL -->
+                          <div class="col-12">
+                            <div class="d-flex justify-content-between align-items-center mb-1">
+                              <label class="form-label required fw-semibold mb-0" for="overlayUrl">
+                                <i class="ti ti-world-www me-1 text-primary"></i> URL Web Overlay / Sumber Visual
+                              </label>
+                              <button type="button" class="btn btn-link btn-sm p-0 text-decoration-none" id="useDefaultOverlayBtn">
+                                <i class="ti ti-sparkles me-1"></i> Gunakan Overlay Bawaan
+                              </button>
+                            </div>
+                            <div class="input-group">
+                              <input type="url" id="overlayUrl" class="form-control" value="http://localhost:8080/overlay" placeholder="http://localhost:8080/overlay">
+                              <button class="btn btn-outline-secondary" type="button" id="reloadPreviewBtn" title="Muat ulang preview di monitor sebelah kanan">
+                                <i class="ti ti-refresh me-1"></i> Preview
+                              </button>
+                            </div>
+                            <small class="form-hint">Gunakan URL overlay bawaan atau tautan web app / widget HTML5 Anda sendiri. Cursor mouse otomatis disembunyikan.</small>
+                          </div>
+
+                          <!-- Resolution -->
+                          <div class="col-md-6">
+                            <label class="form-label fw-semibold" for="streamResolution">
+                              <i class="ti ti-aspect-ratio me-1 text-primary"></i> Resolusi & Aspek Rasio (9:16)
+                            </label>
+                            <select id="streamResolution" class="form-select">
+                              <option value="720x1280" selected>720 × 1280 (HD Portrait - Direkomendasikan)</option>
+                              <option value="1080x1920">1080 × 1920 (Full HD Portrait)</option>
+                            </select>
+                            <small class="form-hint">Orientasi vertikal murni standar aplikasi TikTok Mobile.</small>
+                          </div>
+
+                          <!-- FPS & Bitrate -->
+                          <div class="col-md-6">
+                            <label class="form-label fw-semibold" for="streamFps">
+                              <i class="ti ti-gauge me-1 text-primary"></i> Frame Rate & Bitrate
+                            </label>
+                            <select id="streamFps" class="form-select">
+                              <option value="30|2500" selected>30 FPS — 2500 Kbps (Stabil & Ringan)</option>
+                              <option value="60|4500">60 FPS — 4500 Kbps (Ultra Smooth)</option>
+                              <option value="30|1800">30 FPS — 1800 Kbps (Koneksi Hemat)</option>
+                            </select>
+                            <small class="form-hint">H.264 Video Encoder & AAC 48kHz Audio.</small>
+                          </div>
+
+                          <!-- Action Buttons -->
+                          <div class="col-12 pt-3">
+                            <!-- Start Button -->
+                            <button type="button" id="startStreamBtn" class="btn btn-success btn-lg w-100 py-3 d-flex align-items-center justify-content-center gap-2 shadow-sm">
+                              <i class="ti ti-rocket fs-2"></i>
+                              <span class="fs-3 fw-bold">Mulai Live Sekarang</span>
+                            </button>
+
+                            <!-- Stop Button -->
+                            <button type="button" id="stopStreamBtn" class="btn btn-danger btn-lg w-100 py-3 d-none d-flex align-items-center justify-content-center gap-2 shadow-sm">
+                              <i class="ti ti-player-stop fs-2"></i>
+                              <span class="fs-3 fw-bold">Akhiri Siaran Live</span>
+                            </button>
+                          </div>
+                        </div>
+                      </form>
+
+                      <!-- Force Stop Card (Danger Zone) -->
+                      <div class="card bg-danger-lt border-danger mt-4">
+                        <div class="card-body py-3">
+                          <div class="d-flex align-items-center justify-content-between">
+                            <div class="d-flex align-items-center gap-2">
+                              <i class="ti ti-alert-triangle text-danger fs-1"></i>
+                              <div>
+                                <h4 class="mb-0 fw-bold text-danger">Tindakan Darurat (Force Stop)</h4>
+                                <div class="text-secondary fs-6">Gunakan tombol ini jika room TikTok masih mengambang atau proses background macet.</div>
+                              </div>
+                            </div>
+                            <button type="button" class="btn btn-danger btn-sm px-3" id="forceStopStreamBtn">
+                              <i class="ti ti-bolt me-1"></i> Paksa Hentikan
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <!-- Tab 2: Terminal Logs -->
+                    <div class="tab-pane" id="tab-logs" role="tabpanel">
+                      <div class="d-flex justify-content-between align-items-center mb-2">
+                        <div class="d-flex align-items-center gap-2">
+                          <span class="status-dot status-dot-animated status-green"></span>
+                          <span class="fw-semibold fs-5">Log Proses GStreamer & API</span>
+                        </div>
+                        <div class="btn-group">
+                          <button type="button" class="btn btn-sm btn-outline-secondary" id="clearLogsBtn">
+                            <i class="ti ti-trash me-1"></i> Bersihkan Log
+                          </button>
+                        </div>
+                      </div>
+
+                      <div id="logsTerminal" class="terminal-console border rounded-3 p-3">
+                        <div class="text-muted">[00:00:00] Menunggu aktivitas sistem...</div>
+                      </div>
+                    </div>
+
+                    <!-- Tab 3: Guide & Info -->
+                    <div class="tab-pane" id="tab-guide" role="tabpanel">
+                      <div class="markdown">
+                        <h3 class="fw-bold text-primary mb-3">Cara Kerja Live Stream Standalone</h3>
+                        <p class="text-muted">Aplikasi ini mengalirkan konten web langsung ke server RTMP TikTok tanpa membebani komputer dengan OBS Studio:</p>
+
+                        <div class="row g-3 my-2">
+                          <div class="col-md-6">
+                            <div class="card card-sm border">
+                              <div class="card-body">
+                                <div class="fw-bold mb-1"><i class="ti ti-shield-check text-success me-1"></i> Tanpa Kebocoran Layar & Kursor</div>
+                                <div class="text-muted fs-6">Display virtual Xvfb :99 terisolasi dan opsi <code>show-pointer=false</code> memastikan kursor mouse dan layar pribadi tidak muncul di live.</div>
+                              </div>
+                            </div>
+                          </div>
+                          <div class="col-md-6">
+                            <div class="card card-sm border">
+                              <div class="card-body">
+                                <div class="fw-bold mb-1"><i class="ti ti-key text-primary me-1"></i> Otomatisasi Stream Key</div>
+                                <div class="text-muted fs-6">Sistem mengambil sesi login TikTok dari browser lokal dan membuat room secara otomatis tanpa perlu salin Stream Key manual.</div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        <h4 class="mt-4 mb-2">Langkah Penggunaan:</h4>
+                        <ol class="text-muted ps-3">
+                          <li class="mb-1">Buka browser di Linux (Google Chrome atau Chromium) dan pastikan akun Anda sudah login di <strong>tiktok.com</strong>.</li>
+                          <li class="mb-1">Tuliskan <strong>Judul Siaran</strong> dan tentukan <strong>URL Web Overlay</strong> yang ingin ditampilkan (atau gunakan bawaan).</li>
+                          <li class="mb-1">Klik tombol hijau <strong>Mulai Live Sekarang</strong>. GStreamer akan memulai siaran langsung ke TikTok.</li>
+                          <li class="mb-1">Setelah selesai siaran, klik <strong>Akhiri Siaran Live</strong> agar room ditutup resmi di TikTok.</li>
+                        </ol>
+                      </div>
+                    </div>
+
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Right Column: Phone Mockup (9:16 Monitor Preview) -->
+            <div class="col-lg-5">
+              <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                  <div class="d-flex align-items-center gap-2">
+                    <i class="ti ti-device-mobile text-primary fs-2"></i>
+                    <h3 class="card-title fw-bold">Monitor Preview (9:16)</h3>
+                  </div>
+                  <div class="btn-group">
+                    <a id="openOverlayLink" href="/overlay" target="_blank" class="btn btn-sm btn-ghost-primary" title="Buka di tab baru">
+                      <i class="ti ti-external-link"></i>
+                    </a>
+                  </div>
+                </div>
+
+                <div class="card-body d-flex flex-column align-items-center justify-content-center p-3 bg-dark-subtle rounded-bottom">
+                  <!-- Phone Mockup Container -->
+                  <div class="phone-mockup shadow-lg">
+                    <!-- Phone Speaker & Camera Notch -->
+                    <div class="phone-notch">
+                      <div class="phone-speaker"></div>
+                      <div class="phone-camera"></div>
+                    </div>
+
+                    <!-- Live Iframe Screen -->
+                    <div class="phone-screen">
+                      <iframe id="previewIframe" src="/overlay" title="Live Preview Overlay" sandbox="allow-scripts allow-same-origin allow-forms allow-popups"></iframe>
+                    </div>
+
+                    <!-- Phone Home Bar -->
+                    <div class="phone-home-indicator"></div>
+                  </div>
+
+                  <!-- Active Overlay URL Display -->
+                  <div class="mt-3 text-center w-100">
+                    <div class="text-muted fs-6 text-truncate px-2" id="previewUrlLabel">
+                      Sumber: <span class="fw-semibold text-reset font-monospace">/overlay</span>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Footer Card Room Info -->
+                <div class="card-footer py-2">
+                  <div class="d-flex justify-content-between align-items-center text-muted fs-6">
+                    <span id="previewRoomMeta">Status: Siap Memulai Siaran</span>
+                    <span class="badge bg-green-lt" id="previewLiveBadge">STANDBY</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </div>
+
+      <!-- Footer -->
+      <footer class="footer footer-transparent d-print-none py-3 mt-auto">
+        <div class="container-xl">
+          <div class="row text-center align-items-center flex-row-reverse">
+            <div class="col-lg-auto ms-lg-auto">
+              <ul class="list-inline list-inline-dots mb-0 text-muted fs-6">
+                <li class="list-inline-item">GStreamer 1.0</li>
+                <li class="list-inline-item">Flask REST Engine</li>
+                <li class="list-inline-item">Tabler Admin UI</li>
+              </ul>
+            </div>
+            <div class="col-12 col-lg-auto mt-3 mt-lg-0">
+              <span class="text-muted fs-6">
+                TikTok LIVE Studio &copy; 2026. Standalone Streaming Suite for Linux.
+              </span>
+            </div>
+          </div>
+        </div>
+      </footer>
+    </div>
+  </div>
+
+  <!-- Tabler Core JS & Bootstrap Bundle -->
+  <script src="https://cdn.jsdelivr.net/npm/@tabler/core@1.0.0-beta20/dist/js/tabler.min.js"></script>
+  <!-- Frontend Controller Script -->
+  <script src="/static/app.js"></script>
+</body>
+</html>
