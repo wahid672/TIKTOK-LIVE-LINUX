@@ -227,6 +227,24 @@ document.addEventListener('DOMContentLoaded', () => {
   clearCacheBtn?.addEventListener('click', clearCacheAction);
   previewClearCacheBtn?.addEventListener('click', clearCacheAction);
 
+  // 5.1 Safe Zone Guide Toggle
+  const toggleSafeZoneBtn = document.getElementById('toggleSafeZoneBtn');
+  const safeZoneGuide = document.getElementById('safeZoneGuide');
+
+  toggleSafeZoneBtn?.addEventListener('click', () => {
+    if (!safeZoneGuide) return;
+    const isHidden = safeZoneGuide.classList.contains('d-none');
+    if (isHidden) {
+      safeZoneGuide.classList.remove('d-none');
+      toggleSafeZoneBtn.classList.remove('btn-outline-info');
+      toggleSafeZoneBtn.classList.add('btn-info');
+    } else {
+      safeZoneGuide.classList.add('d-none');
+      toggleSafeZoneBtn.classList.remove('btn-info');
+      toggleSafeZoneBtn.classList.add('btn-outline-info');
+    }
+  });
+
   // 6. Load Saved Settings on Startup
   async function loadSettingsOnStartup() {
     try {

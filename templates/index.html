@@ -433,6 +433,9 @@
                     <h3 class="card-title fw-bold">Monitor Preview (9:16)</h3>
                   </div>
                   <div class="btn-group">
+                    <button type="button" class="btn btn-sm btn-outline-info" id="toggleSafeZoneBtn" title="Tampilkan panduan zona aman TikTok UI & pemotongan layar HP">
+                      <i class="ti ti-layout-grid me-1"></i> Safe Zone
+                    </button>
                     <button type="button" class="btn btn-sm btn-outline-warning" id="previewClearCacheBtn" title="Hapus cache browser & reload CSS overlay terbaru">
                       <i class="ti ti-broom me-1"></i> Hapus Cache
                     </button>
@@ -452,8 +455,22 @@
                     </div>
 
                     <!-- Live Iframe Screen -->
-                    <div class="phone-screen">
+                    <div class="phone-screen position-relative">
                       <iframe id="previewIframe" src="/overlay" title="Live Preview Overlay" sandbox="allow-scripts allow-same-origin allow-forms allow-popups"></iframe>
+                      
+                      <!-- Safe Zone Guide Overlay (Toggled) -->
+                      <div class="safezone-guide d-none" id="safeZoneGuide">
+                        <div class="sz-top">
+                          <span>🔴 UI TikTok Atas (Avatar, Target Gift, Ranking)</span>
+                        </div>
+                        <div class="sz-center">
+                          <span class="sz-badge">🟢 SAFE ZONE AREA</span>
+                          <small>Konten di dalam area ini aman &amp; tidak terpotong di semua HP</small>
+                        </div>
+                        <div class="sz-bottom">
+                          <span>🟡 UI TikTok Bawah (Live Chat, Gift Box, Komentar)</span>
+                        </div>
+                      </div>
                     </div>
 
                     <!-- Phone Home Bar -->
