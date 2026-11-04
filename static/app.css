@@ -54,11 +54,12 @@ body {
    ============================================================================== */
 .phone-mockup {
   position: relative;
-  width: 280px;
-  height: 498px; /* Exact 9:16 proportion for 280px width */
+  width: 324px;
+  height: 576px; /* Exact 9:16 proportion (324 / 576 = 0.5625) */
+  max-width: 100%;
   background: #11141c;
-  border: 10px solid #202636;
-  border-radius: 36px;
+  border: 8px solid #202636;
+  border-radius: 34px;
   box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.6), inset 0 0 0 2px rgba(255, 255, 255, 0.1);
   overflow: hidden;
   display: flex;
@@ -118,11 +119,10 @@ body {
 }
 
 .phone-screen iframe {
-  width: 100%;
-  height: 100%;
   border: none;
   display: block;
   background: #05070d;
+  transform-origin: 0 0;
 }
 
 /* Phone Home Indicator Bar */

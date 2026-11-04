@@ -232,7 +232,6 @@ class Streamer:
 
         # Chrome flags tuned for clean rendering & 24/7 non-stop streaming:
         # - Disables background throttling so requestAnimationFrame and timers never drop frames
-        # - Disables GPU hardware acceleration on Xvfb to prevent black frame surfaces
         # - Disables /dev/shm usage to avoid shared memory exhaustion after hours
         # - Disables disk/GPU shader caching to eliminate disk inflation
         chrome_cmd = [
@@ -254,8 +253,6 @@ class Streamer:
             "--disable-component-update",
             "--force-device-scale-factor=1",
             "--no-sandbox",
-            "--test-type",
-            "--disable-gpu",
             "--disable-dev-shm-usage",
             "--disable-background-timer-throttling",
             "--disable-backgrounding-occluded-windows",
@@ -271,12 +268,7 @@ class Streamer:
         _setup_pulse_env()
         try:
             self.chrome_proc = subprocess.Popen(chrome_cmd, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            time.sleep(3.0)  # Allow page to fully render
-            if self.chrome_proc.poll() is not None:
-                self.stop()
-                err_msg = f"Browser overlay keluar mendadak (exit code {self.chrome_proc.returncode})"
-                self.log_cb(f"ERROR: {err_msg}")
-                return False, err_msg
+            time.sleep(2.5)  # Allow page to fully render
         except Exception as e:
             self.stop()
             self.log_cb(f"Failed to launch Chrome: {e}")

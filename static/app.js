@@ -119,6 +119,33 @@ document.addEventListener('DOMContentLoaded', () => {
     return `${url}${sep}_cb=${Date.now()}`;
   }
 
+  function resizePreviewIframe() {
+    const container = document.getElementById('phoneScreenContainer');
+    if (!container || !previewIframe) return;
+
+    const containerW = container.clientWidth;
+    const containerH = container.clientHeight;
+    if (!containerW || !containerH) return;
+
+    // Locked 9:16 mobile canvas resolution (360 x 640)
+    // Ensures all overlay web apps (quizzes, cards, clocks, banners, timers)
+    // render with 100% pixel-perfect fidelity, immune to desktop browser resolution!
+    const baseW = 360;
+    const baseH = 640;
+
+    const scale = Math.min(containerW / baseW, containerH / baseH);
+    const offsetX = Math.max(0, (containerW - (baseW * scale)) / 2);
+    const offsetY = Math.max(0, (containerH - (baseH * scale)) / 2);
+
+    previewIframe.style.width = `${baseW}px`;
+    previewIframe.style.height = `${baseH}px`;
+    previewIframe.style.transform = `scale(${scale})`;
+    previewIframe.style.transformOrigin = '0 0';
+    previewIframe.style.position = 'absolute';
+    previewIframe.style.left = `${offsetX}px`;
+    previewIframe.style.top = `${offsetY}px`;
+  }
+
   function updatePreview(cacheBust = false) {
     let url = (overlayUrl.value || '').trim();
     if (!url || url === 'https://www.tiktok.com') {
@@ -126,12 +153,18 @@ document.addEventListener('DOMContentLoaded', () => {
       overlayUrl.value = url;
     }
     const targetUrl = cacheBust ? buildCacheBustUrl(url) : url;
-    previewIframe.src = targetUrl;
+    if (previewIframe.src !== targetUrl) {
+      previewIframe.src = targetUrl;
+    }
     openOverlayLink.href = targetUrl;
     if (previewUrlLabel) {
       previewUrlLabel.innerHTML = `Sumber: <span class="fw-semibold text-reset font-monospace">${escapeHtml(url)}</span>`;
     }
+    resizePreviewIframe();
   }
+
+  window.addEventListener('resize', resizePreviewIframe);
+  previewIframe?.addEventListener('load', resizePreviewIframe);
 
   useDefaultOverlayBtn?.addEventListener('click', () => {
     overlayUrl.value = getDefaultOverlayUrl();
@@ -652,6 +685,7 @@ document.addEventListener('DOMContentLoaded', () => {
     studioInspector?.classList.add('d-none');
     deselectAllElements();
     updatePreview(true);
+    setTimeout(resizePreviewIframe, 50);
   });
 
   // B. Load Layout from Server
