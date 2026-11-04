@@ -291,16 +291,28 @@
                           </div>
 
                           <!-- Audio Source Selection -->
-                          <div class="col-12">
+                          <div class="col-md-6">
                             <label class="form-label fw-semibold" for="streamAudioSource">
                               <i class="ti ti-volume me-1 text-primary"></i> Sumber Audio Siaran (Audio Ingest)
                             </label>
                             <select id="streamAudioSource" class="form-select">
-                              <option value="desktop" selected>🔊 Suara Desktop / Musik & Browser Lain (Default Sink Monitor - Direkomendasikan)</option>
+                              <option value="desktop" selected>🔊 Suara Desktop / Musik & Browser Lain</option>
                               <option value="virtual">🎛️ Virtual Sink (Virtual_Sink.monitor)</option>
                               <option value="mic">🎙️ Mikrofon Sistem (@DEFAULT_SOURCE@)</option>
                             </select>
-                            <small class="form-hint">Pilih <strong>Suara Desktop</strong> agar suara musik dari YouTube, Spotify, tab browser lain, atau pemutar musik otomatis masuk ke siaran LIVE.</small>
+                            <small class="form-hint">Tangkap musik YouTube, Spotify, atau audio sistem.</small>
+                          </div>
+
+                          <!-- Encoder Engine Selection -->
+                          <div class="col-md-6">
+                            <label class="form-label fw-semibold" for="streamEngine">
+                              <i class="ti ti-cpu me-1 text-primary"></i> Streaming Engine (Anti-Freeze 24/7)
+                            </label>
+                            <select id="streamEngine" class="form-select">
+                              <option value="gstreamer" selected>🚀 GStreamer 1.0 (Hardware Audio Master Clock)</option>
+                              <option value="ffmpeg">⚡ FFmpeg Engine (Rekomendasi 24/7 Anti-Macet)</option>
+                            </select>
+                            <small class="form-hint">FFmpeg <code>x11grab</code> + <code>pulse</code> terbukti anti-drift untuk siaran 3+ jam.</small>
                           </div>
 
                           <!-- Settings & Cache Management Toolbar -->

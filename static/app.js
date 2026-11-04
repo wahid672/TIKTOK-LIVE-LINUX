@@ -33,6 +33,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const streamResolution = document.getElementById('streamResolution');
   const streamFps = document.getElementById('streamFps');
   const streamAudioSource = document.getElementById('streamAudioSource');
+  const streamEngine = document.getElementById('streamEngine');
   const startStreamBtn = document.getElementById('startStreamBtn');
   const stopStreamBtn = document.getElementById('stopStreamBtn');
   const navForceStopBtn = document.getElementById('navForceStopBtn');
@@ -135,6 +136,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const resolution = streamResolution ? streamResolution.value : '720x1280';
     const fps_bitrate = streamFps ? streamFps.value : '30|2500';
     const audio_source = streamAudioSource ? streamAudioSource.value : 'desktop';
+    const engine = streamEngine ? streamEngine.value : 'gstreamer';
 
     saveSettingsBtn.disabled = true;
     saveSettingsBtn.innerHTML = `
@@ -151,14 +153,15 @@ document.addEventListener('DOMContentLoaded', () => {
           overlay_url: url,
           resolution,
           fps_bitrate,
-          audio_source
+          audio_source,
+          engine
         })
       });
       const data = await res.json();
       if (data.ok) {
         // Also save to localStorage as instant offline cache
         localStorage.setItem('tiktok-live-settings', JSON.stringify({
-          title, overlay_url: url, resolution, fps_bitrate, audio_source
+          title, overlay_url: url, resolution, fps_bitrate, audio_source, engine
         }));
 
         if (saveStatusBadge) {
@@ -257,6 +260,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (s.resolution && streamResolution) streamResolution.value = s.resolution;
         if (s.fps_bitrate && streamFps) streamFps.value = s.fps_bitrate;
         if (s.audio_source && streamAudioSource) streamAudioSource.value = s.audio_source;
+        if (s.engine && streamEngine) streamEngine.value = s.engine;
         updatePreview(false);
       }
     } catch (e) {
@@ -268,6 +272,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (local.resolution && streamResolution) streamResolution.value = local.resolution;
         if (local.fps_bitrate && streamFps) streamFps.value = local.fps_bitrate;
         if (local.audio_source && streamAudioSource) streamAudioSource.value = local.audio_source;
+        if (local.engine && streamEngine) streamEngine.value = local.engine;
         updatePreview(false);
       } catch (err) {}
     }
@@ -340,8 +345,9 @@ document.addEventListener('DOMContentLoaded', () => {
         // Encoder Card
         cardEncoderStatus.textContent = 'LIVE STREAMING';
         cardEncoderStatus.className = 'fs-3 fw-bold text-truncate text-danger';
+        const engineLabel = (streamer.engine === 'ffmpeg' ? 'FFmpeg' : 'GStreamer');
         const audioDevStr = streamer.active_audio_device ? ` • Audio: ${streamer.active_audio_device}` : '';
-        cardEncoderDetails.textContent = `Mengalir ke RTMP${audioDevStr}`;
+        cardEncoderDetails.textContent = `${engineLabel} → RTMP${audioDevStr}`;
         cardEncoderIconBg.className = 'avatar bg-danger text-white rounded-3';
 
         // Quality Card
@@ -377,7 +383,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // Encoder Card
         cardEncoderStatus.textContent = 'OFFLINE';
         cardEncoderStatus.className = 'fs-3 fw-bold text-truncate text-muted';
-        cardEncoderDetails.textContent = 'GStreamer Siap';
+        cardEncoderDetails.textContent = (streamEngine && streamEngine.value === 'ffmpeg' ? 'FFmpeg Siap' : 'GStreamer Siap');
         cardEncoderIconBg.className = 'avatar bg-secondary text-white rounded-3';
 
         // Room Card
@@ -451,6 +457,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const [w, h] = streamResolution.value.split('x').map(Number);
     const [fps, bitrate] = streamFps.value.split('|').map(Number);
     const audioSource = streamAudioSource ? streamAudioSource.value : 'desktop';
+    const engine = streamEngine ? streamEngine.value : 'gstreamer';
 
     startStreamBtn.disabled = true;
     startStreamBtn.innerHTML = `
@@ -469,7 +476,8 @@ document.addEventListener('DOMContentLoaded', () => {
           height: h,
           fps,
           bitrate,
-          audio_source: audioSource
+          audio_source: audioSource,
+          engine
         })
       });
 

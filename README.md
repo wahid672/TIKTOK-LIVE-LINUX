@@ -14,7 +14,9 @@
 
 ## ✨ Fitur Utama
 
-- 🚀 **Streaming Langsung Tanpa OBS Studio**: Menggunakan pipeline GStreamer teroptimasi untuk mengenkode video H.264 dan audio AAC langsung ke RTMP ingest server TikTok.
+- 🚀 **Dual Streaming Engine (GStreamer & FFmpeg)**: Mendukung dua engine encoder handal:
+  - **FFmpeg Engine (`x11grab` + `pulse`)**: Sangat direkomendasikan untuk siaran maraton berjam-jam (3+ jam hingga 24/7 non-stop). Menghilangkan risiko stuttering dan desinkronisasi audio/video.
+  - **GStreamer 1.0 (Pipeline Teroptimasi)**: Menggunakan hardware audio master clock (`pulsesrc provide-clock=true`) dan `videorate` continuous frame-pacing untuk efisiensi CPU maksimal.
 - 🔊 **Audio Lengkap Desktop & Musik**: Otomatis menangkap audio sistem utama (*Default Sink Monitor*). Musik dari Spotify, YouTube di browser lain, pemutar MP3, maupun suara dari overlay masuk secara jernih ke siaran live.
 - 🔒 **Aman Tanpa Kebocoran Layar & Kursor (Zero Desktop Leakage)**: Menggunakan display virtual terisolasi (`Xvfb :99`) dan opsi `show-pointer=false`. Kursor mouse dan aktivitas desktop pribadi tidak akan pernah muncul di live.
 - 🔑 **Autentikasi Otomatis (Zero Manual Stream Key)**: Otomatis membaca sesi login browser (Google Chrome, Chromium, Brave, Edge, Firefox) untuk membuat room dan mengambil RTMP Push URL resmi dari TikTok.
@@ -92,6 +94,7 @@ sudo apt install -y \
   gstreamer1.0-plugins-bad \
   gstreamer1.0-plugins-ugly \
   gstreamer1.0-libav \
+  ffmpeg \
   xvfb \
   google-chrome-stable \
   pulseaudio \
@@ -116,6 +119,7 @@ sudo pacman -Syu --needed \
   gst-plugins-bad \
   gst-plugins-ugly \
   gst-libav \
+  ffmpeg \
   xorg-server-xvfb \
   google-chrome \
   pulseaudio

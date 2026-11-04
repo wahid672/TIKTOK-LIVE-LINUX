@@ -26,7 +26,8 @@ DEFAULT_SETTINGS = {
     "overlay_url": f"http://localhost:{PORT}/overlay",
     "resolution": "720x1280",
     "fps_bitrate": "30|2500",
-    "audio_source": "desktop"
+    "audio_source": "desktop",
+    "engine": "gstreamer"
 }
 
 def load_settings():
@@ -46,7 +47,8 @@ def save_settings(data):
         "overlay_url": (data.get("overlay_url") or current["overlay_url"]).strip(),
         "resolution": str(data.get("resolution") or current["resolution"]).strip(),
         "fps_bitrate": str(data.get("fps_bitrate") or current["fps_bitrate"]).strip(),
-        "audio_source": str(data.get("audio_source") or current["audio_source"]).strip()
+        "audio_source": str(data.get("audio_source") or current["audio_source"]).strip(),
+        "engine": str(data.get("engine") or current.get("engine", "gstreamer")).strip().lower()
     })
     try:
         with open(SETTINGS_FILE, "w", encoding="utf-8") as f:
@@ -160,6 +162,7 @@ def start_stream():
     fps = int(data.get("fps") or 30)
     bitrate = int(data.get("bitrate") or 2500)
     audio_source = (data.get("audio_source") or "desktop").strip()
+    engine = (data.get("engine") or "gstreamer").strip().lower()
 
     # Automatically save settings for persistence
     save_settings({
@@ -167,10 +170,11 @@ def start_stream():
         "overlay_url": overlay_url,
         "resolution": f"{width}x{height}",
         "fps_bitrate": f"{fps}|{bitrate}",
-        "audio_source": audio_source
+        "audio_source": audio_source,
+        "engine": engine
     })
 
-    log_event(f"Request to start LIVE: '{title}' with overlay: {overlay_url} (audio: {audio_source})")
+    log_event(f"Request to start LIVE: '{title}' with overlay: {overlay_url} (audio: {audio_source}, engine: {engine})")
 
     # Check TikTok session first
     session = tiktok.session_status()
@@ -190,7 +194,7 @@ def start_stream():
     if not rtmp_url:
         return jsonify({"ok": False, "error": "No RTMP push URL received from TikTok"}), 500
 
-    # 2. Start GStreamer Streamer
+    # 2. Start Encoder Streamer (GStreamer / FFmpeg)
     success, msg = streamer.start(
         rtmp_url=rtmp_url,
         overlay_url=overlay_url,
@@ -199,7 +203,8 @@ def start_stream():
         height=height,
         fps=fps,
         bitrate=bitrate,
-        audio_source=audio_source
+        audio_source=audio_source,
+        engine=engine
     )
 
     if not success:
