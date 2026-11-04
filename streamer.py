@@ -200,14 +200,9 @@ class Streamer:
 
         # 1. Clean up old locks & start dedicated vertical virtual display (Xvfb :99)
         self._cleanup_locks()
-        self.log_cb(f"Memulai virtual display {VIRTUAL_DISPLAY} ({self.width}x{self.height})...")
+        self.log_cb(f"Starting vertical virtual display {VIRTUAL_DISPLAY} at {self.width}x{self.height}...")
         try:
-            xvfb_cmd = [
-                "Xvfb", VIRTUAL_DISPLAY,
-                "-screen", "0", f"{self.width}x{self.height}x24",
-                "-ac",
-                "-nocursor"
-            ]
+            xvfb_cmd = ["Xvfb", VIRTUAL_DISPLAY, "-screen", "0", f"{self.width}x{self.height}x24", "-ac", "-nocursor"]
             self.xvfb_proc = subprocess.Popen(xvfb_cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             time.sleep(1.5)
         except Exception as e:
@@ -230,14 +225,10 @@ class Streamer:
             "google-chrome"
         )
 
-        # Chrome flags tuned for clean rendering & 24/7 non-stop streaming:
-        # - Disables background throttling so requestAnimationFrame and timers never drop frames
-        # - Disables /dev/shm usage to avoid shared memory exhaustion after hours
-        # - Standalone App Mode (--app) guarantees borderless 100% canvas matching frame bounds
+        # Chrome flags tuned for 24/7 non-stop streaming (proven 3h+ stable configuration):
         chrome_cmd = [
             browser_bin,
             "--kiosk",
-            "--start-fullscreen",
             f"--window-size={self.width},{self.height}",
             "--window-position=0,0",
             f"--user-data-dir={chrome_data_dir}",
@@ -253,54 +244,33 @@ class Streamer:
             "--disable-session-crashed-bubble",
             "--disable-component-update",
             "--force-device-scale-factor=1",
-            "--no-sandbox",
-            "--disable-dev-shm-usage",
-            "--disable-gpu",
-            "--disable-gpu-compositing",
-            "--enable-software-rasterizer",
+            "--disk-cache-size=1",
+            "--media-cache-size=1",
+            "--disable-application-cache",
+            "--disable-gpu-program-cache",
+            "--disable-gpu-shader-disk-cache",
+            # Long-run anti-throttling & memory protection:
             "--disable-background-timer-throttling",
             "--disable-backgrounding-occluded-windows",
             "--disable-renderer-backgrounding",
-            "--disk-cache-size=1",
-            "--media-cache-size=1",
-            f"--app={overlay_url}"
+            "--disable-dev-shm-usage",
+            "--disable-breakpad",
+            "--disable-ipc-flooding-protection",
+            "--js-flags=--max-old-space-size=512",
+            overlay_url
         ]
 
-        self.log_cb(f"Rendering overlay ({overlay_url}) menggunakan {browser_bin} di {VIRTUAL_DISPLAY}...")
+        self.log_cb(f"Starting Chrome Kiosk overlay on {VIRTUAL_DISPLAY}: {overlay_url}...")
         env = os.environ.copy()
         env["DISPLAY"] = VIRTUAL_DISPLAY
         _setup_pulse_env()
-
-        # If a lightweight window manager is present, run it to ensure proper window mapping
-        for wm in ["openbox", "fluxbox", "matchbox-window-manager", "mwm"]:
-            if shutil.which(wm):
-                try:
-                    subprocess.Popen([wm], env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                    break
-                except Exception:
-                    pass
-
         try:
             self.chrome_proc = subprocess.Popen(chrome_cmd, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            time.sleep(2.5)  # Allow page to fully render
+            time.sleep(3.5)  # Allow page to fully render
         except Exception as e:
             self.stop()
             self.log_cb(f"Failed to launch Chrome: {e}")
             return False, f"Failed to launch Chrome: {e}"
-
-        # Align Chrome window precisely to (0,0) and width x height via xdotool
-        try:
-            res = subprocess.run(["xdotool", "search", "--onlyvisible", "--name", ".*"],
-                                 env=env, capture_output=True, text=True, timeout=3)
-            for wid in res.stdout.splitlines():
-                wid = wid.strip()
-                if wid:
-                    subprocess.run(["xdotool", "windowmove", wid, "0", "0"], env=env, timeout=2)
-                    subprocess.run(["xdotool", "windowsize", wid, str(self.width), str(self.height)], env=env, timeout=2)
-                    subprocess.run(["xdotool", "windowraise", wid], env=env, timeout=2)
-            self.log_cb(f"Window overlay diselaraskan presisi ke (0,0) {self.width}x{self.height}.")
-        except Exception:
-            pass
 
         # Move mouse cursor off-screen to avoid triggering :hover states or tooltips
         try:
@@ -402,7 +372,7 @@ class Streamer:
             f'queue max-size-time=2000000000 max-size-buffers=0 max-size-bytes=0 leaky=downstream ! '
             f'rtmp2sink location="{rtmp_url}" sync=false '
             f'ximagesrc display-name={VIRTUAL_DISPLAY} show-pointer=false use-damage=0 ! '
-            f'videoconvert ! videoscale ! videorate ! video/x-raw,format=I420,width={self.width},height={self.height},framerate={self.fps}/1 ! '
+            f'videoconvert ! videorate drop-only=true ! video/x-raw,format=I420,width={self.width},height={self.height},framerate={self.fps}/1 ! '
             f'queue max-size-buffers=2 max-size-time=0 max-size-bytes=0 leaky=downstream ! '
             f'x264enc bitrate={self.bitrate} speed-preset=veryfast tune=zerolatency bframes=0 key-int-max={2 * self.fps} ! '
             f'h264parse config-interval=1 ! queue max-size-time=2000000000 max-size-buffers=0 max-size-bytes=0 leaky=downstream ! mux.video '
