@@ -14,6 +14,12 @@
 
 ## ✨ Fitur Utama
 
+- 🎨 **Live Canvas Studio (Drag & Drop OBS / TikTok Live Studio Style)**:
+  - **Visual Drag & Drop & Resize**: Susun tata letak visual overlay langsung di antarmuka ponsel 9:16 dengan drag mouse/touch dan resize handles di sudut elemen.
+  - **Penambahan Teks Fleksibel**: Tambahkan teks statis (*Title/Rules*), **Running Text (Marquee Ticker)** berjalan horizontal, atau kartu banner pengumuman.
+  - **Live Inspector Editor**: Klik elemen apa pun untuk mengubah teks, subtitle, ukuran font, dan warna teks secara instan.
+  - **Hot-Reload Live Sync**: Perubahan layout dan teks otomatis terkirim dan ter-update secara *real-time* ke siaran live tanpa perlu mematikan stream.
+  - **Smart Center Snapping & Safe Zone Guide**: Otomatis mengunci ke tengah (*center magnetic snap*) serta panduan batas aman antarmuka TikTok Mobile.
 - 🚀 **Dual Streaming Engine (GStreamer & FFmpeg)**: Mendukung dua engine encoder handal:
   - **FFmpeg Engine (`x11grab` + `pulse`)**: Sangat direkomendasikan untuk siaran maraton berjam-jam (3+ jam hingga 24/7 non-stop). Menghilangkan risiko stuttering dan desinkronisasi audio/video.
   - **GStreamer 1.0 (Pipeline Teroptimasi)**: Menggunakan hardware audio master clock (`pulsesrc provide-clock=true`) dan `videorate` continuous frame-pacing untuk efisiensi CPU maksimal.
@@ -191,16 +197,23 @@ Jika berhasil, terminal akan menampilkan output:
    - Pilih **Resolusi** dan **FPS/Bitrate**.
    - Pilih **Sumber Audio Siaran**:
      - `Suara Desktop` (Rekomendasi): Menangkap audio musik YouTube, Spotify, atau pemutar musik apa pun yang sedang diputar di komputer.
-3. **Simpan Pengaturan**:
+3. **Susun Tata Letak Visual (Studio Editor)**:
+   - Pada panel kanan **Live Canvas Studio**, pilih mode **Studio Editor**.
+   - Klik dan geser elemen (Header, Jam & Wave, Banner) ke posisi yang diinginkan.
+   - Klik tombol **+ Teks** untuk menambah judul/aturan baru, **+ Running Text** untuk teks pengumuman berjalan, atau **+ Banner** untuk kartu pesan.
+   - Klik elemen untuk memunculkan panel **Edit Elemen** di bawah kanvas guna mengubah isi tulisan, warna, dan ukuran huruf.
+   - Klik tombol **💾 Simpan** pada toolbar studio untuk menyimpan layout secara permanen.
+   - Beralih ke tombol **📱 Live Preview** untuk melihat hasil akhir siaran.
+4. **Simpan Pengaturan Siaran**:
    - Klik tombol **💾 Simpan Setingan**. Judul dan URL Anda akan tersimpan di file `settings.json` dan otomatis terisi saat dashboard dibuka kembali.
-4. **Perbarui Styling CSS Overlay (Hapus Cache)**:
-   - Jika Anda baru saja mengedit kode CSS atau HTML pada halaman overlay Anda, klik tombol **🧹 Hapus Cache Overlay** pada form kontrol atau header preview monitor. Cache browser akan dibersihkan dan overlay akan memuat CSS versi paling baru seketika.
-5. **Mulai Siaran**:
+5. **Perbarui Styling CSS Overlay (Hapus Cache)**:
+   - Jika Anda baru saja mengedit kode CSS atau HTML pada halaman overlay Anda, klik tombol **🧹 Hapus Cache Overlay**. Cache browser akan dibersihkan seketika.
+6. **Mulai Siaran**:
    - Klik tombol hijau **🚀 Mulai Live Sekarang**.
    - Siaran akan otomatis mengalir ke server TikTok tanpa kursor mouse dan tanpa kebocoran desktop.
-6. **Akhiri Siaran**:
+7. **Akhiri Siaran**:
    - Klik tombol merah **⏹️ Akhiri Siaran Live** saat selesai.
-7. **Tindakan Darurat (Force Stop)**:
+8. **Tindakan Darurat (Force Stop)**:
    - Jika siaran terputus tiba-tiba atau room di TikTok masih mengambang (*hanging*), klik tombol **Force Stop** pada navbar atau tab pengaturan.
 
 ---

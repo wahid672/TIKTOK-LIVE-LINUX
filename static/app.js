@@ -590,6 +590,478 @@ document.addEventListener('DOMContentLoaded', () => {
   navForceStopBtn?.addEventListener('click', handleForceStop);
   forceStopStreamBtn?.addEventListener('click', handleForceStop);
 
+  // 13. Visual Drag & Drop Canvas Studio Controller (OBS / TikTok Studio Style)
+  const btnModeStudio = document.getElementById('btnModeStudio');
+  const btnModePreview = document.getElementById('btnModePreview');
+  const studioCanvas = document.getElementById('studioCanvas');
+  const studioToolbar = document.getElementById('studioToolbar');
+  const btnAddText = document.getElementById('btnAddText');
+  const btnAddMarquee = document.getElementById('btnAddMarquee');
+  const btnAddBanner = document.getElementById('btnAddBanner');
+  const btnSaveLayout = document.getElementById('btnSaveLayout');
+  const btnResetLayout = document.getElementById('btnResetLayout');
+
+  // Inspector Elements
+  const studioInspector = document.getElementById('studioInspector');
+  const inspectorItemLabel = document.getElementById('inspectorItemLabel');
+  const inspectorTitleInput = document.getElementById('inspectorTitleInput');
+  const inspectorSubtitleGroup = document.getElementById('inspectorSubtitleGroup');
+  const inspectorSubtitleInput = document.getElementById('inspectorSubtitleInput');
+  const inspectorFontSizeSelect = document.getElementById('inspectorFontSizeSelect');
+  const inspectorColorSelect = document.getElementById('inspectorColorSelect');
+  const inspectorDeleteBtn = document.getElementById('inspectorDeleteBtn');
+  const inspectorCloseBtn = document.getElementById('inspectorCloseBtn');
+
+  // Studio State
+  let currentLayout = { elements: [] };
+  let selectedElementId = null;
+  let activeInteraction = null; // { type: 'move'|'resize', id, startX, startY, origX, origY, origW, origH, canvasRect }
+  let studioBroadcastChannel = null;
+
+  try {
+    studioBroadcastChannel = new BroadcastChannel('tiktok_overlay_channel');
+  } catch (err) {}
+
+  function notifyOverlayChannel() {
+    if (studioBroadcastChannel) {
+      try {
+        studioBroadcastChannel.postMessage({ type: 'LAYOUT_UPDATED', layout: currentLayout });
+      } catch (e) {}
+    }
+  }
+
+  // A. Mode Switching (Studio vs Preview)
+  btnModeStudio?.addEventListener('click', () => {
+    btnModeStudio.className = 'btn btn-primary';
+    btnModePreview.className = 'btn btn-outline-primary';
+    studioCanvas?.classList.remove('d-none');
+    previewIframe?.classList.add('d-none');
+    studioToolbar?.classList.remove('d-none');
+  });
+
+  btnModePreview?.addEventListener('click', () => {
+    btnModePreview.className = 'btn btn-primary';
+    btnModeStudio.className = 'btn btn-outline-primary';
+    studioCanvas?.classList.add('d-none');
+    previewIframe?.classList.remove('d-none');
+    studioToolbar?.classList.add('d-none');
+    studioInspector?.classList.add('d-none');
+    deselectAllElements();
+    updatePreview(true);
+  });
+
+  // B. Load Layout from Server
+  async function loadStudioLayout() {
+    try {
+      const res = await fetch('/api/overlay/layout?_t=' + Date.now());
+      const data = await res.json();
+      if (data.ok && data.layout && Array.isArray(data.layout.elements)) {
+        currentLayout = data.layout;
+        renderStudioCanvas();
+      }
+    } catch (e) {
+      console.error('Failed to load overlay layout:', e);
+    }
+  }
+
+  // C. Render Elements in Studio Canvas
+  function renderStudioCanvas() {
+    if (!studioCanvas) return;
+    studioCanvas.innerHTML = '';
+
+    currentLayout.elements.forEach(item => {
+      if (item.visible === false) return;
+
+      const el = document.createElement('div');
+      el.className = 'studio-item' + (item.id === selectedElementId ? ' selected' : '');
+      el.id = 'studio_item_' + item.id;
+      el.style.left = `${item.x}%`;
+      el.style.top = `${item.y}%`;
+      el.style.width = `${item.w}%`;
+      el.style.height = `${item.h}%`;
+      if (item.bgColor && item.bgColor !== 'transparent') {
+        el.style.background = item.bgColor;
+      }
+
+      // Badge label
+      const badge = document.createElement('div');
+      badge.className = 'studio-badge';
+      let typeLabel = 'Teks';
+      if (item.type === 'header') typeLabel = 'Header Live';
+      else if (item.type === 'clock') typeLabel = 'Jam & Audio';
+      else if (item.type === 'banner') typeLabel = 'Banner';
+      else if (item.type === 'marquee') typeLabel = 'Running Text';
+      badge.textContent = typeLabel;
+      el.appendChild(badge);
+
+      // Inner Content
+      const content = document.createElement('div');
+      content.className = 'studio-inner-content';
+      content.style.color = item.color || '#ffffff';
+      content.style.fontSize = `${Math.max(10, Math.round((item.fontSize || 16) * 0.45))}px`; // Scale down for phone mockup preview
+
+      if (item.type === 'header') {
+        content.innerHTML = `
+          <div style="font-size: 8px; font-weight:800; color:#fca5a5; letter-spacing:1px;">🔴 TIKTOK LIVE</div>
+          <div style="font-weight:800; text-truncate; max-width:95%;">${escapeHtml(item.subtitle || 'Live Broadcast')}</div>
+        `;
+      } else if (item.type === 'clock') {
+        content.innerHTML = `
+          <div style="font-weight:800; font-size:16px;">12:00:00</div>
+          <div style="font-size:8px; opacity:0.8;">▂▃▅▆▇ (Wave)</div>
+        `;
+      } else if (item.type === 'banner') {
+        content.innerHTML = `
+          <div style="font-weight:700; color:${item.color || '#38bdf8'};">${escapeHtml(item.title)}</div>
+          ${item.subtitle ? `<div style="font-size:9px; opacity:0.8;">${escapeHtml(item.subtitle)}</div>` : ''}
+        `;
+      } else if (item.type === 'marquee') {
+        content.innerHTML = `
+          <div style="white-space:nowrap; overflow:hidden; font-weight:600;">
+            <i class="ti ti-marquee me-1"></i> ${escapeHtml(item.title)}
+          </div>
+        `;
+      } else {
+        content.innerHTML = `<div style="font-weight:700;">${escapeHtml(item.title)}</div>`;
+      }
+      el.appendChild(content);
+
+      // Resize Handle
+      const handle = document.createElement('div');
+      handle.className = 'studio-resize-handle';
+      handle.setAttribute('data-handle', 'se');
+      el.appendChild(handle);
+
+      // Pointer event for selection, dragging, and resizing
+      el.addEventListener('pointerdown', (e) => onElementPointerDown(e, item.id));
+
+      studioCanvas.appendChild(el);
+    });
+  }
+
+  // D. Pointer Event Handling (Smooth Zero-Dependency Drag & Resize)
+  function onElementPointerDown(e, itemId) {
+    e.preventDefault();
+    e.stopPropagation();
+
+    const isHandle = e.target.classList.contains('studio-resize-handle');
+    const targetItem = currentLayout.elements.find(el => el.id === itemId);
+    if (!targetItem) return;
+
+    selectElement(itemId);
+
+    const canvasRect = studioCanvas.getBoundingClientRect();
+    activeInteraction = {
+      type: isHandle ? 'resize' : 'move',
+      id: itemId,
+      startX: e.clientX,
+      startY: e.clientY,
+      origX: targetItem.x,
+      origY: targetItem.y,
+      origW: targetItem.w,
+      origH: targetItem.h,
+      canvasRect
+    };
+
+    const targetEl = document.getElementById('studio_item_' + itemId);
+    if (targetEl) {
+      targetEl.setPointerCapture(e.pointerId);
+      if (activeInteraction.type === 'move') {
+        targetEl.classList.add('dragging');
+      }
+    }
+  }
+
+  window.addEventListener('pointermove', (e) => {
+    if (!activeInteraction) return;
+
+    const { type, id, startX, startY, origX, origY, origW, origH, canvasRect } = activeInteraction;
+    const targetItem = currentLayout.elements.find(el => el.id === id);
+    if (!targetItem) return;
+
+    const deltaXPixels = e.clientX - startX;
+    const deltaYPixels = e.clientY - startY;
+
+    // Convert pixel delta to percentage of canvas
+    const deltaXPercent = (deltaXPixels / canvasRect.width) * 100;
+    const deltaYPercent = (deltaYPixels / canvasRect.height) * 100;
+
+    if (type === 'move') {
+      let newX = Math.round((origX + deltaXPercent) * 10) / 10;
+      let newY = Math.round((origY + deltaYPercent) * 10) / 10;
+
+      // Bound to canvas edges
+      newX = Math.max(0, Math.min(100 - targetItem.w, newX));
+      newY = Math.max(0, Math.min(100 - targetItem.h, newY));
+
+      // Magnetic Smart Center Snap (OBS style)
+      const centerTarget = (100 - targetItem.w) / 2;
+      if (Math.abs(newX - centerTarget) < 2.5) {
+        newX = Math.round(centerTarget * 10) / 10;
+      }
+
+      targetItem.x = newX;
+      targetItem.y = newY;
+
+      const domEl = document.getElementById('studio_item_' + id);
+      if (domEl) {
+        domEl.style.left = `${newX}%`;
+        domEl.style.top = `${newY}%`;
+      }
+    } else if (type === 'resize') {
+      let newW = Math.round((origW + deltaXPercent) * 10) / 10;
+      let newH = Math.round((origH + deltaYPercent) * 10) / 10;
+
+      // Minimum and maximum constraints
+      newW = Math.max(15, Math.min(100 - targetItem.x, newW));
+      newH = Math.max(4, Math.min(100 - targetItem.y, newH));
+
+      targetItem.w = newW;
+      targetItem.h = newH;
+
+      const domEl = document.getElementById('studio_item_' + id);
+      if (domEl) {
+        domEl.style.width = `${newW}%`;
+        domEl.style.height = `${newH}%`;
+      }
+    }
+  });
+
+  window.addEventListener('pointerup', () => {
+    if (!activeInteraction) return;
+
+    const { id } = activeInteraction;
+    const domEl = document.getElementById('studio_item_' + id);
+    if (domEl) {
+      domEl.classList.remove('dragging');
+    }
+
+    activeInteraction = null;
+    notifyOverlayChannel();
+  });
+
+  // Canvas click outside element to deselect
+  studioCanvas?.addEventListener('pointerdown', (e) => {
+    if (e.target === studioCanvas) {
+      deselectAllElements();
+    }
+  });
+
+  // E. Element Selection & Inspector Panel
+  function selectElement(itemId) {
+    selectedElementId = itemId;
+    document.querySelectorAll('.studio-item').forEach(el => {
+      if (el.id === 'studio_item_' + itemId) {
+        el.classList.add('selected');
+      } else {
+        el.classList.remove('selected');
+      }
+    });
+
+    const item = currentLayout.elements.find(el => el.id === itemId);
+    if (!item || !studioInspector) return;
+
+    studioInspector.classList.remove('d-none');
+    let label = 'Teks';
+    if (item.type === 'header') label = 'Header Siaran';
+    else if (item.type === 'clock') label = 'Jam & Audio Equalizer';
+    else if (item.type === 'banner') label = 'Banner Info';
+    else if (item.type === 'marquee') label = 'Running Text';
+
+    inspectorItemLabel.textContent = `Edit ${label}`;
+    inspectorTitleInput.value = item.title || '';
+
+    if (item.type === 'header' || item.type === 'banner') {
+      inspectorSubtitleGroup.classList.remove('d-none');
+      inspectorSubtitleInput.value = item.subtitle || '';
+    } else {
+      inspectorSubtitleGroup.classList.add('d-none');
+    }
+
+    inspectorFontSizeSelect.value = String(item.fontSize || 18);
+    inspectorColorSelect.value = item.color || '#ffffff';
+  }
+
+  function deselectAllElements() {
+    selectedElementId = null;
+    document.querySelectorAll('.studio-item').forEach(el => el.classList.remove('selected'));
+    if (studioInspector) studioInspector.classList.add('d-none');
+  }
+
+  inspectorCloseBtn?.addEventListener('click', deselectAllElements);
+
+  // F. Inspector Live Update Listeners
+  inspectorTitleInput?.addEventListener('input', () => {
+    if (!selectedElementId) return;
+    const item = currentLayout.elements.find(el => el.id === selectedElementId);
+    if (item) {
+      item.title = inspectorTitleInput.value;
+      renderStudioCanvas();
+      notifyOverlayChannel();
+    }
+  });
+
+  inspectorSubtitleInput?.addEventListener('input', () => {
+    if (!selectedElementId) return;
+    const item = currentLayout.elements.find(el => el.id === selectedElementId);
+    if (item) {
+      item.subtitle = inspectorSubtitleInput.value;
+      renderStudioCanvas();
+      notifyOverlayChannel();
+    }
+  });
+
+  inspectorFontSizeSelect?.addEventListener('change', () => {
+    if (!selectedElementId) return;
+    const item = currentLayout.elements.find(el => el.id === selectedElementId);
+    if (item) {
+      item.fontSize = parseInt(inspectorFontSizeSelect.value, 10);
+      renderStudioCanvas();
+      notifyOverlayChannel();
+    }
+  });
+
+  inspectorColorSelect?.addEventListener('change', () => {
+    if (!selectedElementId) return;
+    const item = currentLayout.elements.find(el => el.id === selectedElementId);
+    if (item) {
+      item.color = inspectorColorSelect.value;
+      renderStudioCanvas();
+      notifyOverlayChannel();
+    }
+  });
+
+  inspectorDeleteBtn?.addEventListener('click', () => {
+    if (!selectedElementId) return;
+    const item = currentLayout.elements.find(el => el.id === selectedElementId);
+    if (!item) return;
+
+    if (!confirm(`Hapus elemen "${item.title || item.type}" dari kanvas?`)) return;
+
+    currentLayout.elements = currentLayout.elements.filter(el => el.id !== selectedElementId);
+    deselectAllElements();
+    renderStudioCanvas();
+    notifyOverlayChannel();
+  });
+
+  // G. Add New Elements Buttons
+  btnAddText?.addEventListener('click', () => {
+    const newId = 'text_' + Date.now();
+    currentLayout.elements.push({
+      id: newId,
+      type: 'text',
+      title: 'TEKS JUDUL BARU',
+      subtitle: '',
+      x: 10,
+      y: 52,
+      w: 80,
+      h: 8,
+      fontSize: 20,
+      color: '#ffffff',
+      bgColor: 'rgba(0, 0, 0, 0.65)',
+      visible: true
+    });
+    renderStudioCanvas();
+    selectElement(newId);
+    notifyOverlayChannel();
+  });
+
+  btnAddMarquee?.addEventListener('click', () => {
+    const newId = 'marquee_' + Date.now();
+    currentLayout.elements.push({
+      id: newId,
+      type: 'marquee',
+      title: 'Follow & tap layar untuk support live ini! Selamat datang semuanya! 🌟',
+      subtitle: '',
+      x: 5,
+      y: 82,
+      w: 90,
+      h: 7,
+      fontSize: 14,
+      color: '#38bdf8',
+      bgColor: 'rgba(15, 23, 42, 0.85)',
+      visible: true
+    });
+    renderStudioCanvas();
+    selectElement(newId);
+    notifyOverlayChannel();
+  });
+
+  btnAddBanner?.addEventListener('click', () => {
+    const newId = 'banner_' + Date.now();
+    currentLayout.elements.push({
+      id: newId,
+      type: 'banner',
+      title: '📢 PENGUMUMAN PENTING',
+      subtitle: 'Jangan lupa follow & share siaran ini!',
+      x: 5,
+      y: 25,
+      w: 90,
+      h: 10,
+      fontSize: 16,
+      color: '#facc15',
+      bgColor: 'rgba(30, 41, 59, 0.75)',
+      visible: true
+    });
+    renderStudioCanvas();
+    selectElement(newId);
+    notifyOverlayChannel();
+  });
+
+  // H. Save Layout to Server Action
+  btnSaveLayout?.addEventListener('click', async () => {
+    btnSaveLayout.disabled = true;
+    btnSaveLayout.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Menyimpan...';
+
+    try {
+      const res = await fetch('/api/overlay/layout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(currentLayout)
+      });
+      const data = await res.json();
+      if (data.ok) {
+        notifyOverlayChannel();
+        btnSaveLayout.className = 'btn btn-sm btn-success';
+        btnSaveLayout.innerHTML = '<i class="ti ti-check me-1"></i> Tersimpan!';
+        setTimeout(() => {
+          btnSaveLayout.className = 'btn btn-sm btn-primary';
+          btnSaveLayout.innerHTML = '<i class="ti ti-device-floppy me-1"></i> Simpan';
+          btnSaveLayout.disabled = false;
+        }, 2000);
+      } else {
+        alert('Gagal menyimpan layout: ' + (data.error || 'Terjadi kesalahan'));
+        btnSaveLayout.disabled = false;
+        btnSaveLayout.innerHTML = '<i class="ti ti-device-floppy me-1"></i> Simpan';
+      }
+    } catch (err) {
+      alert('Koneksi gagal saat menyimpan layout: ' + err.message);
+      btnSaveLayout.disabled = false;
+      btnSaveLayout.innerHTML = '<i class="ti ti-device-floppy me-1"></i> Simpan';
+    }
+  });
+
+  // I. Reset Layout Action
+  btnResetLayout?.addEventListener('click', async () => {
+    if (!confirm('Kembalikan tata letak overlay ke pengaturan bawaan?')) return;
+
+    btnResetLayout.disabled = true;
+    try {
+      const res = await fetch('/api/overlay/reset', { method: 'POST' });
+      const data = await res.json();
+      if (data.ok && data.layout) {
+        currentLayout = data.layout;
+        deselectAllElements();
+        renderStudioCanvas();
+        notifyOverlayChannel();
+      }
+    } catch (err) {
+      alert('Gagal mereset layout: ' + err.message);
+    } finally {
+      btnResetLayout.disabled = false;
+    }
+  });
+
   // Helper
   function escapeHtml(text) {
     if (!text) return '';
@@ -603,6 +1075,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Initial Startup Execution
   loadSettingsOnStartup();
+  loadStudioLayout();
   loadAudioSources();
   checkStatus();
   fetchLogs();

@@ -9,22 +9,16 @@
   <title>TikTok LIVE Stream Overlay</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;800;900&family=Space+Grotesk:wght@600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;800;900&family=Space+Grotesk:wght@600;700;800&display=swap" rel="stylesheet">
   <style>
     * {
       box-sizing: border-box;
       margin: 0;
       padding: 0;
-      cursor: none !important; /* Hide mouse cursor completely */
+      cursor: none !important; /* Hide mouse cursor completely on stream output */
       user-select: none;
     }
 
-    /*
-     * TikTok LIVE Mobile Safe-Zone Tuning:
-     * - Top 14vh: Safe from streamer avatar, host rankings, goals, and close button.
-     * - Bottom 38vh: Safe from scrolling live comments, gift box, share, and chat input.
-     * - Horizontal 8vw: Safe from 19.5:9 / 20:9 smartphone aspect-fill zoom-in crop.
-     */
     body {
       width: 100vw;
       height: 100vh;
@@ -32,11 +26,6 @@
       background: radial-gradient(circle at 50% 25%, #1e1b4b 0%, #09090b 70%, #030712 100%);
       font-family: 'Outfit', sans-serif;
       color: #f8fafc;
-      display: flex;
-      flex-direction: column;
-      justify-content: space-between;
-      align-items: center;
-      padding: 13vh 7vw 36vh 7vw;
       position: relative;
     }
 
@@ -67,32 +56,52 @@
       pointer-events: none;
     }
 
-    /* Header */
-    .overlay-header {
-      position: relative;
+    /* Canvas Elements Layer */
+    #overlayCanvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
       z-index: 10;
+      pointer-events: none;
+    }
+
+    .canvas-item {
+      position: absolute;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      transition: top 0.2s ease, left 0.2s ease, width 0.2s ease, height 0.2s ease;
+      box-sizing: border-box;
+    }
+
+    /* Element: Header (Live Pill & Title) */
+    .overlay-header {
       display: flex;
       flex-direction: column;
       align-items: center;
       gap: 10px;
       width: 100%;
+      text-align: center;
     }
 
     .live-pill {
       display: inline-flex;
       align-items: center;
       gap: 8px;
-      background: rgba(239, 68, 68, 0.18);
-      border: 1px solid rgba(239, 68, 68, 0.45);
-      padding: 6px 18px;
+      background: rgba(239, 68, 68, 0.2);
+      border: 1px solid rgba(239, 68, 68, 0.5);
+      padding: 5px 16px;
       border-radius: 999px;
       backdrop-filter: blur(12px);
-      box-shadow: 0 0 20px rgba(239, 68, 68, 0.25);
+      box-shadow: 0 0 20px rgba(239, 68, 68, 0.3);
     }
 
     .pulse-dot {
-      width: 10px;
-      height: 10px;
+      width: 9px;
+      height: 9px;
       background-color: #ef4444;
       border-radius: 50%;
       box-shadow: 0 0 10px #ef4444;
@@ -106,7 +115,7 @@
     }
 
     .live-text {
-      font-size: 13px;
+      font-size: 12px;
       font-weight: 800;
       letter-spacing: 2px;
       color: #fca5a5;
@@ -115,7 +124,7 @@
 
     .stream-title {
       font-family: 'Space Grotesk', sans-serif;
-      font-size: 26px;
+      font-size: 24px;
       font-weight: 800;
       text-align: center;
       background: linear-gradient(135deg, #ffffff 40%, #c084fc 100%);
@@ -123,37 +132,36 @@
       -webkit-text-fill-color: transparent;
       text-shadow: 0 8px 24px rgba(192, 132, 252, 0.25);
       line-height: 1.25;
-      max-width: 90%;
+      max-width: 95%;
       word-break: break-word;
     }
 
-    /* Center Content / Audio Waves */
+    /* Element: Clock & Visualizer Waves */
     .center-content {
-      position: relative;
-      z-index: 10;
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      gap: 16px;
-      margin: auto 0;
+      gap: 12px;
       width: 100%;
+      height: 100%;
     }
 
     .clock-display {
       font-family: 'Space Grotesk', sans-serif;
-      font-size: 48px;
+      font-size: 44px;
       font-weight: 800;
       letter-spacing: 2px;
       color: #ffffff;
-      text-shadow: 0 0 30px rgba(255, 255, 255, 0.25);
+      text-shadow: 0 0 30px rgba(255, 255, 255, 0.3);
+      line-height: 1;
     }
 
     .wave-container {
       display: flex;
       align-items: center;
-      gap: 7px;
-      height: 50px;
+      gap: 6px;
+      height: 38px;
     }
 
     .wave-bar {
@@ -163,44 +171,98 @@
       animation: wave 1.2s ease-in-out infinite alternate;
     }
 
-    .wave-bar:nth-child(1) { height: 20px; animation-delay: 0.1s; }
-    .wave-bar:nth-child(2) { height: 38px; animation-delay: 0.2s; }
-    .wave-bar:nth-child(3) { height: 28px; animation-delay: 0.4s; }
-    .wave-bar:nth-child(4) { height: 46px; animation-delay: 0.3s; }
-    .wave-bar:nth-child(5) { height: 24px; animation-delay: 0.5s; }
-    .wave-bar:nth-child(6) { height: 40px; animation-delay: 0.15s; }
-    .wave-bar:nth-child(7) { height: 18px; animation-delay: 0.35s; }
+    .wave-bar:nth-child(1) { height: 18px; animation-delay: 0.1s; }
+    .wave-bar:nth-child(2) { height: 34px; animation-delay: 0.2s; }
+    .wave-bar:nth-child(3) { height: 24px; animation-delay: 0.4s; }
+    .wave-bar:nth-child(4) { height: 38px; animation-delay: 0.3s; }
+    .wave-bar:nth-child(5) { height: 22px; animation-delay: 0.5s; }
+    .wave-bar:nth-child(6) { height: 32px; animation-delay: 0.15s; }
+    .wave-bar:nth-child(7) { height: 16px; animation-delay: 0.35s; }
 
     @keyframes wave {
       0% { transform: scaleY(0.4); }
       100% { transform: scaleY(1.3); }
     }
 
-    /* Footer Glass Card */
-    .footer-card {
-      position: relative;
-      z-index: 10;
-      background: rgba(30, 41, 59, 0.6);
-      border: 1px solid rgba(255, 255, 255, 0.12);
-      border-radius: 18px;
-      padding: 14px 20px;
+    /* Element: Glass Banner / Card */
+    .banner-card {
+      background: rgba(30, 41, 59, 0.7);
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      border-radius: 16px;
+      padding: 10px 16px;
       backdrop-filter: blur(16px);
       text-align: center;
       box-shadow: 0 10px 25px -10px rgba(0, 0, 0, 0.5);
       width: 100%;
-      max-width: 95%;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
     }
 
-    .footer-highlight {
+    .banner-title {
       font-weight: 700;
       font-size: 15px;
       color: #38bdf8;
+      line-height: 1.2;
       margin-bottom: 2px;
     }
 
-    .footer-sub {
+    .banner-sub {
       font-size: 12px;
       color: #94a3b8;
+      line-height: 1.2;
+    }
+
+    /* Element: Custom Static Text */
+    .custom-text-box {
+      width: 100%;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 6px 12px;
+      border-radius: 12px;
+      text-align: center;
+      font-weight: 700;
+      line-height: 1.25;
+      word-break: break-word;
+      text-shadow: 0 2px 8px rgba(0, 0, 0, 0.8);
+    }
+
+    /* Element: Marquee Running Text */
+    .marquee-wrapper {
+      width: 100%;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      overflow: hidden;
+      white-space: nowrap;
+      border-radius: 12px;
+      padding: 0 10px;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      backdrop-filter: blur(8px);
+    }
+
+    .marquee-track {
+      display: inline-flex;
+      align-items: center;
+      padding-left: 100%;
+      animation: marquee-anim 16s linear infinite;
+      font-weight: 600;
+      font-size: 14px;
+    }
+
+    .marquee-spacer {
+      margin: 0 16px;
+      color: #f43f5e;
+      font-size: 12px;
+    }
+
+    @keyframes marquee-anim {
+      0% { transform: translateX(0); }
+      100% { transform: translateX(-100%); }
     }
   </style>
 </head>
@@ -208,53 +270,182 @@
   <div class="ambient-glow-1"></div>
   <div class="ambient-glow-2"></div>
 
-  <!-- Header (Safe Zone Aware) -->
-  <header class="overlay-header">
-    <div class="live-pill">
-      <span class="pulse-dot"></span>
-      <span class="live-text">TIKTOK LIVE</span>
-    </div>
-    <h1 class="stream-title" id="streamTitleText">Live Broadcast</h1>
-  </header>
-
-  <!-- Center Content (Always in Safe Area) -->
-  <main class="center-content">
-    <div class="clock-display" id="clockText">00:00:00</div>
-    <div class="wave-container">
-      <div class="wave-bar"></div>
-      <div class="wave-bar"></div>
-      <div class="wave-bar"></div>
-      <div class="wave-bar"></div>
-      <div class="wave-bar"></div>
-      <div class="wave-bar"></div>
-      <div class="wave-bar"></div>
-    </div>
-  </main>
-
-  <!-- Footer (Placed Above TikTok Comments Area) -->
-  <footer class="footer-card">
-    <div class="footer-highlight">✨ Selamat Datang di Siaran Live!</div>
-    <div class="footer-sub">Tap-tap layar & tinggalkan komentar ya!</div>
-  </footer>
+  <!-- Dynamic Canvas Elements Layer -->
+  <div id="overlayCanvas"></div>
 
   <script>
-    // Live Clock
+    // Live Clock State
+    let clockInterval = null;
     function updateClock() {
       const now = new Date();
       const h = String(now.getHours()).padStart(2, '0');
       const m = String(now.getMinutes()).padStart(2, '0');
       const s = String(now.getSeconds()).padStart(2, '0');
-      document.getElementById('clockText').textContent = `${h}:${m}:${s}`;
+      const el = document.getElementById('liveClockDisplay');
+      if (el) el.textContent = `${h}:${m}:${s}`;
     }
-    setInterval(updateClock, 1000);
-    updateClock();
 
-    // Query param title override support: ?title=My+Stream+Title
+    // Default Fallback Elements
+    const DEFAULT_LAYOUT = {
+      elements: [
+        {
+          id: "el_header",
+          type: "header",
+          title: "TIKTOK LIVE",
+          subtitle: "Live Broadcast",
+          x: 5, y: 12, w: 90, h: 9,
+          fontSize: 24,
+          color: "#ffffff",
+          bgColor: "rgba(0, 0, 0, 0)",
+          visible: true
+        },
+        {
+          id: "el_clock",
+          type: "clock",
+          title: "Jam & Wave",
+          subtitle: "",
+          x: 10, y: 38, w: 80, h: 14,
+          fontSize: 44,
+          color: "#ffffff",
+          bgColor: "rgba(0, 0, 0, 0)",
+          visible: true
+        },
+        {
+          id: "el_footer",
+          type: "banner",
+          title: "✨ Selamat Datang di Siaran Live!",
+          subtitle: "Tap-tap layar & tinggalkan komentar ya!",
+          x: 5, y: 66, "w": 90, "h": 9,
+          fontSize: 15,
+          color: "#38bdf8",
+          bgColor: "rgba(30, 41, 59, 0.7)",
+          visible: true
+        }
+      ]
+    };
+
+    const canvas = document.getElementById('overlayCanvas');
     const urlParams = new URLSearchParams(window.location.search);
-    const title = urlParams.get('title');
-    if (title) {
-      document.getElementById('streamTitleText').textContent = title;
+    const queryTitle = urlParams.get('title');
+
+    function renderLayout(layout) {
+      if (!layout || !Array.isArray(layout.elements)) return;
+      canvas.innerHTML = '';
+
+      layout.elements.forEach(item => {
+        if (item.visible === false) return;
+
+        const container = document.createElement('div');
+        container.className = `canvas-item item-${item.type}`;
+        container.id = item.id;
+        container.style.left = `${item.x}%`;
+        container.style.top = `${item.y}%`;
+        container.style.width = `${item.w}%`;
+        container.style.height = `${item.h}%`;
+
+        if (item.type === 'header') {
+          const streamTitle = queryTitle || item.subtitle || 'Live Broadcast';
+          container.innerHTML = `
+            <div class="overlay-header">
+              <div class="live-pill">
+                <span class="pulse-dot"></span>
+                <span class="live-text">${escapeHtml(item.title || 'TIKTOK LIVE')}</span>
+              </div>
+              <h1 class="stream-title" style="font-size: ${item.fontSize || 24}px; color: ${item.color || '#ffffff'};">
+                ${escapeHtml(streamTitle)}
+              </h1>
+            </div>
+          `;
+        } else if (item.type === 'clock') {
+          container.innerHTML = `
+            <div class="center-content">
+              <div class="clock-display" id="liveClockDisplay" style="font-size: ${item.fontSize || 44}px; color: ${item.color || '#ffffff'};">00:00:00</div>
+              <div class="wave-container">
+                <div class="wave-bar"></div>
+                <div class="wave-bar"></div>
+                <div class="wave-bar"></div>
+                <div class="wave-bar"></div>
+                <div class="wave-bar"></div>
+                <div class="wave-bar"></div>
+                <div class="wave-bar"></div>
+              </div>
+            </div>
+          `;
+        } else if (item.type === 'banner') {
+          container.innerHTML = `
+            <div class="banner-card" style="background: ${item.bgColor || 'rgba(30, 41, 59, 0.7)'}; border-color: rgba(255,255,255,0.14);">
+              <div class="banner-title" style="color: ${item.color || '#38bdf8'}; font-size: ${item.fontSize || 15}px;">
+                ${escapeHtml(item.title)}
+              </div>
+              ${item.subtitle ? `<div class="banner-sub">${escapeHtml(item.subtitle)}</div>` : ''}
+            </div>
+          `;
+        } else if (item.type === 'text') {
+          container.innerHTML = `
+            <div class="custom-text-box" style="background: ${item.bgColor || 'transparent'}; color: ${item.color || '#ffffff'}; font-size: ${item.fontSize || 20}px;">
+              ${escapeHtml(item.title)}
+            </div>
+          `;
+        } else if (item.type === 'marquee') {
+          container.innerHTML = `
+            <div class="marquee-wrapper" style="background: ${item.bgColor || 'rgba(15, 23, 42, 0.75)'}; color: ${item.color || '#38bdf8'};">
+              <div class="marquee-track" style="font-size: ${item.fontSize || 14}px;">
+                <span>${escapeHtml(item.title)}</span>
+                <span class="marquee-spacer">✦</span>
+                <span>${escapeHtml(item.title)}</span>
+                <span class="marquee-spacer">✦</span>
+              </div>
+            </div>
+          `;
+        }
+
+        canvas.appendChild(container);
+      });
+
+      updateClock();
     }
+
+    function escapeHtml(text) {
+      if (!text) return '';
+      return text.toString()
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+
+    // BroadcastChannel for instant live updates from the dashboard
+    try {
+      const channel = new BroadcastChannel('tiktok_overlay_channel');
+      channel.onmessage = (e) => {
+        if (e.data && e.data.type === 'LAYOUT_UPDATED' && e.data.layout) {
+          renderLayout(e.data.layout);
+        }
+      };
+    } catch (err) {}
+
+    // Polling for headless / remote instances
+    async function fetchLayout() {
+      try {
+        const res = await fetch('/api/overlay/layout?_t=' + Date.now());
+        const data = await res.json();
+        if (data.ok && data.layout) {
+          renderLayout(data.layout);
+        }
+      } catch (err) {
+        // Fallback default
+        if (!canvas.children.length) renderLayout(DEFAULT_LAYOUT);
+      }
+    }
+
+    // Clock Interval
+    if (!clockInterval) {
+      clockInterval = setInterval(updateClock, 1000);
+    }
+
+    fetchLayout();
+    setInterval(fetchLayout, 3000);
   </script>
 </body>
 </html>

@@ -436,39 +436,66 @@
               </div>
             </div>
 
-            <!-- Right Column: Phone Mockup (9:16 Monitor Preview) -->
+            <!-- Right Column: Live Canvas Studio (OBS / TikTok Studio Style) -->
             <div class="col-lg-5">
               <div class="card">
-                <div class="card-header d-flex justify-content-between align-items-center">
+                <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2 py-2">
                   <div class="d-flex align-items-center gap-2">
                     <i class="ti ti-device-mobile text-primary fs-2"></i>
-                    <h3 class="card-title fw-bold">Monitor Preview (9:16)</h3>
+                    <h3 class="card-title fw-bold m-0">Live Canvas Studio</h3>
                   </div>
-                  <div class="btn-group">
-                    <button type="button" class="btn btn-sm btn-outline-info" id="toggleSafeZoneBtn" title="Tampilkan panduan zona aman TikTok UI & pemotongan layar HP">
-                      <i class="ti ti-layout-grid me-1"></i> Safe Zone
+                  <!-- Mode Switcher: Studio Edit vs Live Preview -->
+                  <div class="btn-group btn-group-sm" role="group">
+                    <button type="button" class="btn btn-primary" id="btnModeStudio" title="Mode Drag & Drop susun posisi & tambah teks">
+                      <i class="ti ti-drag-drop me-1"></i> Studio Editor
                     </button>
-                    <button type="button" class="btn btn-sm btn-outline-warning" id="previewClearCacheBtn" title="Hapus cache browser & reload CSS overlay terbaru">
-                      <i class="ti ti-broom me-1"></i> Hapus Cache
+                    <button type="button" class="btn btn-outline-primary" id="btnModePreview" title="Mode melihat tampilan asli overlay live">
+                      <i class="ti ti-eye me-1"></i> Live Preview
                     </button>
-                    <a id="openOverlayLink" href="/overlay" target="_blank" class="btn btn-sm btn-ghost-primary" title="Buka di tab baru">
-                      <i class="ti ti-external-link"></i>
-                    </a>
                   </div>
                 </div>
 
                 <div class="card-body d-flex flex-column align-items-center justify-content-center p-3 bg-dark-subtle rounded-bottom">
+                  <!-- Studio Quick Toolbar (Visible in Studio Mode) -->
+                  <div id="studioToolbar" class="w-100 mb-2">
+                    <div class="d-flex flex-wrap gap-1 justify-content-between align-items-center bg-dark-subtle p-2 rounded-2 border border-secondary-subtle">
+                      <div class="d-flex flex-wrap gap-1">
+                        <button type="button" class="btn btn-sm btn-outline-primary" id="btnAddText" title="Tambah teks judul / banner">
+                          <i class="ti ti-typography me-1"></i> + Teks
+                        </button>
+                        <button type="button" class="btn btn-sm btn-outline-info" id="btnAddMarquee" title="Tambah teks berjalan (Running Text)">
+                          <i class="ti ti-marquee me-1"></i> + Running Text
+                        </button>
+                        <button type="button" class="btn btn-sm btn-outline-success" id="btnAddBanner" title="Tambah kartu banner pesan">
+                          <i class="ti ti-id me-1"></i> + Banner
+                        </button>
+                      </div>
+                      <div class="d-flex gap-1">
+                        <button type="button" class="btn btn-sm btn-primary" id="btnSaveLayout" title="Simpan tata letak posisi overlay">
+                          <i class="ti ti-device-floppy me-1"></i> Simpan
+                        </button>
+                        <button type="button" class="btn btn-sm btn-ghost-secondary" id="btnResetLayout" title="Reset tata letak ke standar">
+                          <i class="ti ti-rotate me-1"></i> Reset
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
                   <!-- Phone Mockup Container -->
-                  <div class="phone-mockup shadow-lg">
+                  <div class="phone-mockup shadow-lg position-relative">
                     <!-- Phone Speaker & Camera Notch -->
                     <div class="phone-notch">
                       <div class="phone-speaker"></div>
                       <div class="phone-camera"></div>
                     </div>
 
-                    <!-- Live Iframe Screen -->
-                    <div class="phone-screen position-relative">
-                      <iframe id="previewIframe" src="/overlay" title="Live Preview Overlay" sandbox="allow-scripts allow-same-origin allow-forms allow-popups"></iframe>
+                    <!-- Phone Screen Area -->
+                    <div class="phone-screen position-relative" id="phoneScreenContainer">
+                      <!-- Studio Drag & Drop Interactive Canvas (Studio Mode) -->
+                      <div id="studioCanvas" class="studio-canvas"></div>
+
+                      <!-- Live Iframe Screen (Preview Mode) -->
+                      <iframe id="previewIframe" class="d-none" src="/overlay" title="Live Preview Overlay" sandbox="allow-scripts allow-same-origin allow-forms allow-popups"></iframe>
                       
                       <!-- Safe Zone Guide Overlay (Toggled) -->
                       <div class="safezone-guide d-none" id="safeZoneGuide">
@@ -489,8 +516,74 @@
                     <div class="phone-home-indicator"></div>
                   </div>
 
+                  <!-- Selected Element Inspector Panel -->
+                  <div id="studioInspector" class="studio-inspector w-100 mt-2 d-none">
+                    <div class="d-flex justify-content-between align-items-center mb-2 pb-1 border-bottom border-secondary-subtle">
+                      <div class="d-flex align-items-center gap-1">
+                        <i class="ti ti-adjustments text-primary"></i>
+                        <span class="fw-bold fs-6 text-primary" id="inspectorItemLabel">Edit Elemen</span>
+                      </div>
+                      <div class="d-flex gap-1">
+                        <button type="button" class="btn btn-sm btn-outline-danger py-0 px-2" id="inspectorDeleteBtn" title="Hapus elemen ini">
+                          <i class="ti ti-trash me-1"></i> Hapus
+                        </button>
+                        <button type="button" class="btn btn-sm btn-ghost-secondary py-0 px-1" id="inspectorCloseBtn" title="Tutup">
+                          <i class="ti ti-x"></i>
+                        </button>
+                      </div>
+                    </div>
+                    <div class="row g-2">
+                      <div class="col-12">
+                        <label class="form-label fs-6 mb-1 fw-semibold">Teks / Konten</label>
+                        <input type="text" id="inspectorTitleInput" class="form-control form-control-sm" placeholder="Isi teks...">
+                      </div>
+                      <div class="col-12" id="inspectorSubtitleGroup">
+                        <label class="form-label fs-6 mb-1 fw-semibold">Subtitle / Keterangan</label>
+                        <input type="text" id="inspectorSubtitleInput" class="form-control form-control-sm" placeholder="Keterangan...">
+                      </div>
+                      <div class="col-6">
+                        <label class="form-label fs-6 mb-1 fw-semibold">Ukuran Font</label>
+                        <select id="inspectorFontSizeSelect" class="form-select form-select-sm">
+                          <option value="12">12px (Mini)</option>
+                          <option value="15">15px (Normal)</option>
+                          <option value="18">18px (Medium)</option>
+                          <option value="24">24px (Besar)</option>
+                          <option value="32">32px (Extra)</option>
+                          <option value="44">44px (Jumbo)</option>
+                        </select>
+                      </div>
+                      <div class="col-6">
+                        <label class="form-label fs-6 mb-1 fw-semibold">Warna Teks</label>
+                        <select id="inspectorColorSelect" class="form-select form-select-sm">
+                          <option value="#ffffff">⚪ Putih</option>
+                          <option value="#38bdf8">🔵 Biru Cyan</option>
+                          <option value="#f43f5e">🔴 Merah Rose</option>
+                          <option value="#facc15">🟡 Kuning Emas</option>
+                          <option value="#4ade80">🟢 Hijau Neon</option>
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- Toolbar Bottom Buttons -->
+                  <div class="d-flex justify-content-between align-items-center w-100 mt-2 pt-1 border-top border-secondary-subtle">
+                    <div class="btn-group btn-group-sm">
+                      <button type="button" class="btn btn-sm btn-outline-info" id="toggleSafeZoneBtn" title="Tampilkan batas aman UI TikTok">
+                        <i class="ti ti-layout-grid me-1"></i> Safe Zone
+                      </button>
+                      <button type="button" class="btn btn-sm btn-outline-warning" id="previewClearCacheBtn" title="Bersihkan cache browser overlay">
+                        <i class="ti ti-broom me-1"></i> Hapus Cache
+                      </button>
+                    </div>
+                    <div>
+                      <a id="openOverlayLink" href="/overlay" target="_blank" class="btn btn-sm btn-ghost-primary" title="Buka overlay di tab baru">
+                        <i class="ti ti-external-link me-1"></i> Buka Fullscreen
+                      </a>
+                    </div>
+                  </div>
+
                   <!-- Active Overlay URL Display -->
-                  <div class="mt-3 text-center w-100">
+                  <div class="mt-2 text-center w-100">
                     <div class="text-muted fs-6 text-truncate px-2" id="previewUrlLabel">
                       Sumber: <span class="fw-semibold text-reset font-monospace">/overlay</span>
                     </div>

@@ -57,6 +57,66 @@ def save_settings(data):
     except Exception as e:
         return False, str(e)
 
+LAYOUT_FILE = BASE_DIR / "overlay_layout.json"
+
+DEFAULT_LAYOUT = {
+    "canvas": {"width": 720, "height": 1280},
+    "elements": [
+        {
+            "id": "el_header",
+            "type": "header",
+            "title": "TIKTOK LIVE",
+            "subtitle": "Live Broadcast",
+            "x": 5, "y": 12, "w": 90, "h": 9,
+            "fontSize": 24,
+            "color": "#ffffff",
+            "bgColor": "rgba(0, 0, 0, 0)",
+            "visible": True
+        },
+        {
+            "id": "el_clock",
+            "type": "clock",
+            "title": "Jam & Wave",
+            "subtitle": "",
+            "x": 10, "y": 38, "w": 80, "h": 14,
+            "fontSize": 44,
+            "color": "#ffffff",
+            "bgColor": "rgba(0, 0, 0, 0)",
+            "visible": True
+        },
+        {
+            "id": "el_footer",
+            "type": "banner",
+            "title": "✨ Selamat Datang di Siaran Live!",
+            "subtitle": "Tap-tap layar & tinggalkan komentar ya!",
+            "x": 5, "y": 66, "w": 90, "h": 9,
+            "fontSize": 15,
+            "color": "#38bdf8",
+            "bgColor": "rgba(30, 41, 59, 0.7)",
+            "visible": True
+        }
+    ]
+}
+
+def load_layout():
+    if LAYOUT_FILE.exists():
+        try:
+            with open(LAYOUT_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                if isinstance(data, dict) and "elements" in data:
+                    return data
+        except Exception as e:
+            print(f"Error loading layout: {e}")
+    return DEFAULT_LAYOUT.copy()
+
+def save_layout(data):
+    try:
+        with open(LAYOUT_FILE, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2, ensure_ascii=False)
+        return True, "Layout overlay berhasil disimpan."
+    except Exception as e:
+        return False, str(e)
+
 app = Flask(__name__, static_folder="static", template_folder="templates")
 CORS(app)
 
@@ -130,6 +190,25 @@ def handle_clear_cache():
         "cleared": cleared,
         "timestamp": int(time.time() * 1000)
     })
+
+@app.route("/api/overlay/layout", methods=["GET", "POST"])
+def handle_overlay_layout():
+    if request.method == "POST":
+        data = request.get_json() or {}
+        ok, msg = save_layout(data)
+        if ok:
+            log_event("Layout overlay Studio berhasil diperbarui & disimpan.")
+            return jsonify({"ok": True, "message": msg, "layout": load_layout()})
+        return jsonify({"ok": False, "error": msg}), 500
+    return jsonify({"ok": True, "layout": load_layout()})
+
+@app.route("/api/overlay/reset", methods=["POST"])
+def handle_overlay_reset():
+    ok, msg = save_layout(DEFAULT_LAYOUT)
+    if ok:
+        log_event("Layout overlay Studio berhasil direset ke standar.")
+        return jsonify({"ok": True, "message": "Layout berhasil direset ke standar.", "layout": load_layout()})
+    return jsonify({"ok": False, "error": msg}), 500
 
 @app.route("/api/audio-sources", methods=["GET"])
 def get_audio_sources():
