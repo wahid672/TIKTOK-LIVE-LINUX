@@ -12,7 +12,7 @@ import subprocess
 import time
 import urllib.parse
 from pathlib import Path
-from flask import Flask, jsonify, render_template, request
+from flask import Flask, jsonify, render_template, request, send_file
 from flask_cors import CORS
 import tiktok
 from streamer import Streamer
@@ -247,6 +247,14 @@ def handle_overlay_reset():
         log_event("Layout overlay Studio berhasil direset ke standar.")
         return jsonify({"ok": True, "message": "Layout berhasil direset ke standar.", "layout": load_layout()})
     return jsonify({"ok": False, "error": msg}), 500
+
+@app.route("/api/stream/snapshot", methods=["GET"])
+def get_stream_snapshot():
+    """Captures real-time image frame directly from virtual display :99."""
+    path = streamer.capture_snapshot()
+    if path and os.path.exists(path):
+        return send_file(path, mimetype="image/jpeg", max_age=0)
+    return jsonify({"ok": False, "error": "Snapshot display virtual tidak tersedia. Pastikan siaran aktif."}), 404
 
 @app.route("/api/audio-sources", methods=["GET"])
 def get_audio_sources():

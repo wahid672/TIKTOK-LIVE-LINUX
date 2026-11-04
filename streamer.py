@@ -233,10 +233,11 @@ class Streamer:
         # Chrome flags tuned for clean rendering & 24/7 non-stop streaming:
         # - Disables background throttling so requestAnimationFrame and timers never drop frames
         # - Disables /dev/shm usage to avoid shared memory exhaustion after hours
-        # - Enables software rasterization on CPU (SwiftShader) so Xvfb never produces black frames
+        # - Standalone App Mode (--app) guarantees borderless 100% canvas matching frame bounds
         chrome_cmd = [
             browser_bin,
             "--kiosk",
+            "--start-fullscreen",
             f"--window-size={self.width},{self.height}",
             "--window-position=0,0",
             f"--user-data-dir={chrome_data_dir}",
@@ -245,7 +246,7 @@ class Streamer:
             "--disable-infobars",
             "--disable-background-networking",
             "--disable-sync",
-            "--disable-features=Translate,OptimizationHints,MediaRouter,UseOzonePlatform",
+            "--disable-features=Translate,OptimizationHints,MediaRouter",
             "--autoplay-policy=no-user-gesture-required",
             "--hide-scrollbars",
             "--disable-notifications",
@@ -254,18 +255,15 @@ class Streamer:
             "--force-device-scale-factor=1",
             "--no-sandbox",
             "--disable-dev-shm-usage",
-            # Essential CPU software rasterizer flags for Xvfb (fixes black screen):
             "--disable-gpu",
             "--disable-gpu-compositing",
             "--enable-software-rasterizer",
-            "--use-gl=swiftshader",
-            # Long-run anti-throttling & memory protection:
             "--disable-background-timer-throttling",
             "--disable-backgrounding-occluded-windows",
             "--disable-renderer-backgrounding",
             "--disk-cache-size=1",
             "--media-cache-size=1",
-            overlay_url
+            f"--app={overlay_url}"
         ]
 
         self.log_cb(f"Rendering overlay ({overlay_url}) menggunakan {browser_bin} di {VIRTUAL_DISPLAY}...")
@@ -289,6 +287,20 @@ class Streamer:
             self.stop()
             self.log_cb(f"Failed to launch Chrome: {e}")
             return False, f"Failed to launch Chrome: {e}"
+
+        # Align Chrome window precisely to (0,0) and width x height via xdotool
+        try:
+            res = subprocess.run(["xdotool", "search", "--onlyvisible", "--name", ".*"],
+                                 env=env, capture_output=True, text=True, timeout=3)
+            for wid in res.stdout.splitlines():
+                wid = wid.strip()
+                if wid:
+                    subprocess.run(["xdotool", "windowmove", wid, "0", "0"], env=env, timeout=2)
+                    subprocess.run(["xdotool", "windowsize", wid, str(self.width), str(self.height)], env=env, timeout=2)
+                    subprocess.run(["xdotool", "windowraise", wid], env=env, timeout=2)
+            self.log_cb(f"Window overlay diselaraskan presisi ke (0,0) {self.width}x{self.height}.")
+        except Exception:
+            pass
 
         # Move mouse cursor off-screen to avoid triggering :hover states or tooltips
         try:
@@ -390,7 +402,7 @@ class Streamer:
             f'queue max-size-time=2000000000 max-size-buffers=0 max-size-bytes=0 leaky=downstream ! '
             f'rtmp2sink location="{rtmp_url}" sync=false '
             f'ximagesrc display-name={VIRTUAL_DISPLAY} show-pointer=false use-damage=0 ! '
-            f'videoconvert ! videorate drop-only=true ! video/x-raw,format=I420,width={self.width},height={self.height},framerate={self.fps}/1 ! '
+            f'videoconvert ! videoscale ! videorate ! video/x-raw,format=I420,width={self.width},height={self.height},framerate={self.fps}/1 ! '
             f'queue max-size-buffers=2 max-size-time=0 max-size-bytes=0 leaky=downstream ! '
             f'x264enc bitrate={self.bitrate} speed-preset=veryfast tune=zerolatency bframes=0 key-int-max={2 * self.fps} ! '
             f'h264parse config-interval=1 ! queue max-size-time=2000000000 max-size-buffers=0 max-size-bytes=0 leaky=downstream ! mux.video '
@@ -491,3 +503,36 @@ class Streamer:
         self.active_audio_device = None
         self.log_cb("Siaran berhasil dihentikan secara bersih.")
         return True
+
+    def capture_snapshot(self):
+        """Captures a snapshot image of virtual display :99 to /tmp/stream_snapshot.jpg."""
+        out_path = "/tmp/stream_snapshot.jpg"
+        env = os.environ.copy()
+        env["DISPLAY"] = VIRTUAL_DISPLAY
+        try:
+            subprocess.run([
+                "ffmpeg", "-y",
+                "-f", "x11grab",
+                "-video_size", f"{self.width}x{self.height}",
+                "-i", f"{VIRTUAL_DISPLAY}+0,0",
+                "-vframes", "1",
+                "-q:v", "2",
+                out_path
+            ], env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=4)
+            if os.path.exists(out_path) and os.path.getsize(out_path) > 0:
+                return out_path
+        except Exception:
+            pass
+
+        try:
+            subprocess.run(["xwd", "-display", VIRTUAL_DISPLAY, "-root", "-out", "/tmp/screen.xwd"],
+                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=2)
+            if shutil.which("convert"):
+                subprocess.run(["convert", "/tmp/screen.xwd", out_path],
+                               stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=2)
+                if os.path.exists(out_path) and os.path.getsize(out_path) > 0:
+                    return out_path
+        except Exception:
+            pass
+
+        return None
