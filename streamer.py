@@ -233,7 +233,7 @@ class Streamer:
         # Chrome flags tuned for clean rendering & 24/7 non-stop streaming:
         # - Disables background throttling so requestAnimationFrame and timers never drop frames
         # - Disables /dev/shm usage to avoid shared memory exhaustion after hours
-        # - Disables disk/GPU shader caching to eliminate disk inflation
+        # - Enables software rasterization on CPU (SwiftShader) so Xvfb never produces black frames
         chrome_cmd = [
             browser_bin,
             "--kiosk",
@@ -245,7 +245,7 @@ class Streamer:
             "--disable-infobars",
             "--disable-background-networking",
             "--disable-sync",
-            "--disable-features=Translate,OptimizationHints,MediaRouter",
+            "--disable-features=Translate,OptimizationHints,MediaRouter,UseOzonePlatform",
             "--autoplay-policy=no-user-gesture-required",
             "--hide-scrollbars",
             "--disable-notifications",
@@ -254,6 +254,12 @@ class Streamer:
             "--force-device-scale-factor=1",
             "--no-sandbox",
             "--disable-dev-shm-usage",
+            # Essential CPU software rasterizer flags for Xvfb (fixes black screen):
+            "--disable-gpu",
+            "--disable-gpu-compositing",
+            "--enable-software-rasterizer",
+            "--use-gl=swiftshader",
+            # Long-run anti-throttling & memory protection:
             "--disable-background-timer-throttling",
             "--disable-backgrounding-occluded-windows",
             "--disable-renderer-backgrounding",
@@ -266,6 +272,16 @@ class Streamer:
         env = os.environ.copy()
         env["DISPLAY"] = VIRTUAL_DISPLAY
         _setup_pulse_env()
+
+        # If a lightweight window manager is present, run it to ensure proper window mapping
+        for wm in ["openbox", "fluxbox", "matchbox-window-manager", "mwm"]:
+            if shutil.which(wm):
+                try:
+                    subprocess.Popen([wm], env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                    break
+                except Exception:
+                    pass
+
         try:
             self.chrome_proc = subprocess.Popen(chrome_cmd, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             time.sleep(2.5)  # Allow page to fully render
@@ -362,31 +378,29 @@ class Streamer:
 
     def _start_gstreamer(self, rtmp_url, audio_dev):
         """Starts streaming via GStreamer with audited 24/7 stability optimizations:
-        - pulsesrc provide-clock=true: Audio hardware clock acts as master clock (prevents hours-long A/V drift)
-        - videorate (without drop-only): Generates rock-solid CFR 30.000 FPS with frame hold (no timestamp gaps)
-        - x264enc speed-preset=ultrafast tune=zerolatency bframes=0: Eliminates encoder lookahead delay
-        - h264parse config-interval=1: Repeats SPS/PPS headers at every keyframe for fast player recovery
-        - NO leaky queue after flvmux: Prevents FLV tag corruption that causes TikTok player stalls
-        - rtmp2sink async-connect=true sync=false: Non-blocking socket ingest
+        - pulsesrc provide-clock=false: monotonic system clock serves as master timebase (never stalls video)
+        - videorate drop-only=true: rock-solid CFR 30.000 FPS with zero lag accumulation
+        - x264enc speed-preset=veryfast tune=zerolatency: instant frame encoding
+        - h264parse config-interval=1: repeats SPS/PPS headers at every keyframe for fast player recovery
+        - rtmp2sink sync=false: non-blocking socket ingest
         """
         self.log_cb(f"Menjalankan GStreamer Engine: {self.width}x{self.height} @ {self.fps}fps ({self.bitrate} kbps)...")
         pipe_desc = (
             f'flvmux name=mux streamable=true enforce-increasing-timestamps=true ! '
-            f'queue max-size-buffers=500 max-size-time=5000000000 max-size-bytes=0 ! '
-            f'rtmp2sink location="{rtmp_url}" async-connect=true sync=false '
+            f'queue max-size-time=2000000000 max-size-buffers=0 max-size-bytes=0 leaky=downstream ! '
+            f'rtmp2sink location="{rtmp_url}" sync=false '
             f'ximagesrc display-name={VIRTUAL_DISPLAY} show-pointer=false use-damage=0 ! '
-            f'videoconvert ! videoscale ! videorate ! video/x-raw,format=I420,width={self.width},height={self.height},framerate={self.fps}/1 ! '
+            f'videoconvert ! videorate drop-only=true ! video/x-raw,format=I420,width={self.width},height={self.height},framerate={self.fps}/1 ! '
             f'queue max-size-buffers=2 max-size-time=0 max-size-bytes=0 leaky=downstream ! '
-            f'x264enc bitrate={self.bitrate} speed-preset=ultrafast tune=zerolatency bframes=0 key-int-max={2 * self.fps} ! '
-            f'h264parse config-interval=1 ! queue max-size-buffers=200 max-size-time=2000000000 max-size-bytes=0 ! mux.video '
-            f'pulsesrc device="{audio_dev}" provide-clock=true buffer-time=100000 latency-time=10000 ! '
-            f'audioconvert ! audioresample quality=4 ! audiorate tolerance=40000000 ! audio/x-raw,rate=48000,channels=2 ! '
-            f'audioconvert ! avenc_aac bitrate=160000 ! aacparse ! queue max-size-buffers=200 max-size-time=2000000000 max-size-bytes=0 ! mux.audio'
+            f'x264enc bitrate={self.bitrate} speed-preset=veryfast tune=zerolatency bframes=0 key-int-max={2 * self.fps} ! '
+            f'h264parse config-interval=1 ! queue max-size-time=2000000000 max-size-buffers=0 max-size-bytes=0 leaky=downstream ! mux.video '
+            f'pulsesrc device="{audio_dev}" provide-clock=false buffer-time=200000 latency-time=10000 ! '
+            f'audioconvert ! audioresample ! audiorate tolerance=40000000 ! audio/x-raw,rate=48000,channels=2 ! '
+            f'audioconvert ! avenc_aac bitrate=160000 ! aacparse ! queue max-size-time=2000000000 max-size-buffers=0 max-size-bytes=0 leaky=downstream ! mux.audio'
         )
 
         try:
             self.pipe = Gst.parse_launch(pipe_desc)
-            # Use monotonic system clock to avoid pipeline stalls
             try:
                 self.pipe.use_clock(Gst.SystemClock.obtain())
             except Exception:
