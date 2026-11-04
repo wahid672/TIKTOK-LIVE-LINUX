@@ -251,7 +251,7 @@ def handle_overlay_reset():
 @app.route("/api/stream/snapshot", methods=["GET"])
 def get_stream_snapshot():
     """Captures real-time image frame directly from virtual display :99."""
-    path = streamer.capture_snapshot()
+    path = streamer.capture_snapshot() if hasattr(streamer, "capture_snapshot") else None
     if path and os.path.exists(path):
         return send_file(path, mimetype="image/jpeg", max_age=0)
     return jsonify({"ok": False, "error": "Snapshot display virtual tidak tersedia. Pastikan siaran aktif."}), 404

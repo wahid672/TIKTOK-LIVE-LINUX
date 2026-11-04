@@ -28,3 +28,4 @@ Thumbs.db
 .active_room.json
 # User saved settings
 settings.json
+*.zip
