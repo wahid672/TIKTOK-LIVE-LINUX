@@ -120,6 +120,21 @@ def save_layout(data):
 app = Flask(__name__, static_folder="static", template_folder="templates")
 CORS(app)
 
+@app.errorhandler(Exception)
+def handle_unexpected_error(e):
+    log_event(f"Unhandled Server Error: {e}")
+    return jsonify({
+        "ok": False,
+        "error": f"Server Error: {str(e)}"
+    }), 500
+
+@app.errorhandler(404)
+def handle_not_found(e):
+    return jsonify({
+        "ok": False,
+        "error": "Not Found"
+    }), 404
+
 logs_queue = collections.deque(maxlen=100)
 
 def log_event(msg):
@@ -141,10 +156,33 @@ def overlay():
 
 @app.route("/api/status", methods=["GET"])
 def get_status():
-    session = tiktok.session_status()
-    stream_status = streamer.get_status()
-    persisted_room = tiktok.get_active_room()
-    session_id = tiktok.get_session_id()
+    try:
+        session = tiktok.session_status()
+    except Exception as e:
+        session = {"ok": False, "browser": None, "expires": None, "error": str(e)}
+
+    try:
+        stream_status = streamer.get_status()
+    except Exception as e:
+        stream_status = {
+            "is_streaming": False,
+            "duration": 0,
+            "engine": "gstreamer",
+            "has_ffmpeg": False,
+            "has_gstreamer": False,
+            "error": str(e)
+        }
+
+    try:
+        persisted_room = tiktok.get_active_room()
+    except Exception:
+        persisted_room = None
+
+    try:
+        session_id = tiktok.get_session_id()
+    except Exception:
+        session_id = ""
+
     return jsonify({
         "ok": True,
         "tiktok": session,
@@ -227,7 +265,7 @@ def get_logs():
 
 @app.route("/api/stream/start", methods=["POST"])
 def start_stream():
-    data = request.get_json() or {}
+    data = request.get_json(silent=True) or {}
     title = (data.get("title") or "TikTok LIVE Broadcast").strip()
     
     # Default to built-in clean overlay if empty or not provided
@@ -244,21 +282,31 @@ def start_stream():
     engine = (data.get("engine") or "gstreamer").strip().lower()
 
     # Automatically save settings for persistence
-    save_settings({
-        "title": title,
-        "overlay_url": overlay_url,
-        "resolution": f"{width}x{height}",
-        "fps_bitrate": f"{fps}|{bitrate}",
-        "audio_source": audio_source,
-        "engine": engine
-    })
+    try:
+        save_settings({
+            "title": title,
+            "overlay_url": overlay_url,
+            "resolution": f"{width}x{height}",
+            "fps_bitrate": f"{fps}|{bitrate}",
+            "audio_source": audio_source,
+            "engine": engine
+        })
+    except Exception as e:
+        log_event(f"Notice on save settings: {e}")
 
     log_event(f"Request to start LIVE: '{title}' with overlay: {overlay_url} (audio: {audio_source}, engine: {engine})")
 
     # Check TikTok session first
-    session = tiktok.session_status()
+    try:
+        session = tiktok.session_status()
+    except Exception as e:
+        session = {"ok": False, "error": str(e)}
+
     if not session.get("ok"):
-        return jsonify({"ok": False, "error": "No active TikTok login session detected. Please log in to TikTok in Chrome first."}), 400
+        return jsonify({
+            "ok": False,
+            "error": "Sesi login akun TikTok tidak terdeteksi di browser. Silakan buka browser Chrome/Chromium di Linux dan pastikan Anda sudah login ke tiktok.com."
+        }), 400
 
     # 1. Create Room on TikTok
     try:
@@ -267,24 +315,37 @@ def start_stream():
         log_event(f"Room created! Room ID: {room.get('room_id')}")
     except Exception as e:
         log_event(f"Failed to create TikTok room: {e}")
-        return jsonify({"ok": False, "error": f"Failed to create TikTok room: {e}"}), 500
+        return jsonify({
+            "ok": False,
+            "error": f"Gagal membuat room TikTok LIVE: {e}"
+        }), 400
 
-    rtmp_url = room.get("url")
+    rtmp_url = room.get("url") if isinstance(room, dict) else None
     if not rtmp_url:
-        return jsonify({"ok": False, "error": "No RTMP push URL received from TikTok"}), 500
+        return jsonify({
+            "ok": False,
+            "error": "Server TikTok tidak memberikan URL push RTMP. Pastikan akun TikTok Anda telah memenuhi syarat izin siaran LIVE."
+        }), 400
 
     # 2. Start Encoder Streamer (GStreamer / FFmpeg)
-    success, msg = streamer.start(
-        rtmp_url=rtmp_url,
-        overlay_url=overlay_url,
-        room_info=room,
-        width=width,
-        height=height,
-        fps=fps,
-        bitrate=bitrate,
-        audio_source=audio_source,
-        engine=engine
-    )
+    try:
+        success, msg = streamer.start(
+            rtmp_url=rtmp_url,
+            overlay_url=overlay_url,
+            room_info=room,
+            width=width,
+            height=height,
+            fps=fps,
+            bitrate=bitrate,
+            audio_source=audio_source,
+            engine=engine
+        )
+    except Exception as e:
+        log_event(f"Error launching streaming engine: {e}")
+        return jsonify({
+            "ok": False,
+            "error": f"Gagal menjalankan encoder streaming: {e}"
+        }), 500
 
     if not success:
         return jsonify({"ok": False, "error": msg}), 500

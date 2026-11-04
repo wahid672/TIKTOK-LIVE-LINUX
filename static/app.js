@@ -92,6 +92,19 @@ document.addEventListener('DOMContentLoaded', () => {
     return `${h}:${m}:${s}`;
   }
 
+  // Safe fetch helper that guarantees clean JSON parsing and human-readable errors
+  async function safeFetchJson(url, options = {}) {
+    const res = await fetch(url, options);
+    let data;
+    try {
+      data = await res.json();
+    } catch (err) {
+      const text = await res.text().catch(() => '');
+      throw new Error(`Server (${res.status}): ${text.substring(0, 120) || 'Respon bukan format JSON'}`);
+    }
+    return { ok: res.ok, status: res.status, data };
+  }
+
   // 3. Preview URL Synchronizer & Cache Buster
   function getDefaultOverlayUrl() {
     return window.location.origin + '/overlay';
@@ -145,7 +158,7 @@ document.addEventListener('DOMContentLoaded', () => {
     `;
 
     try {
-      const res = await fetch('/api/settings', {
+      const { ok, data } = await safeFetchJson('/api/settings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -157,8 +170,7 @@ document.addEventListener('DOMContentLoaded', () => {
           engine
         })
       });
-      const data = await res.json();
-      if (data.ok) {
+      if (ok && data && data.ok) {
         // Also save to localStorage as instant offline cache
         localStorage.setItem('tiktok-live-settings', JSON.stringify({
           title, overlay_url: url, resolution, fps_bitrate, audio_source, engine
@@ -171,7 +183,7 @@ document.addEventListener('DOMContentLoaded', () => {
           }, 3500);
         }
       } else {
-        alert('Gagal menyimpan pengaturan: ' + (data.error || 'Unknown error'));
+        alert('Gagal menyimpan pengaturan: ' + ((data && data.error) || 'Terjadi kesalahan'));
       }
     } catch (e) {
       alert('Terjadi kesalahan saat menyimpan pengaturan: ' + e.message);
@@ -195,8 +207,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     try {
-      const res = await fetch('/api/clear-cache', { method: 'POST' });
-      const data = await res.json();
+      const { data } = await safeFetchJson('/api/clear-cache', { method: 'POST' });
 
       // Force reload preview with cache busting query param
       updatePreview(true);
@@ -251,9 +262,8 @@ document.addEventListener('DOMContentLoaded', () => {
   // 6. Load Saved Settings on Startup
   async function loadSettingsOnStartup() {
     try {
-      const res = await fetch('/api/settings');
-      const data = await res.json();
-      if (data.ok && data.settings) {
+      const { ok, data } = await safeFetchJson('/api/settings');
+      if (ok && data && data.ok && data.settings) {
         const s = data.settings;
         if (s.title && streamTitle) streamTitle.value = s.title;
         if (s.overlay_url && overlayUrl) overlayUrl.value = s.overlay_url;
@@ -281,9 +291,8 @@ document.addEventListener('DOMContentLoaded', () => {
   // 7. Fetch Audio Sources
   async function loadAudioSources() {
     try {
-      const res = await fetch('/api/audio-sources');
-      const data = await res.json();
-      if (data.ok && Array.isArray(data.sources) && streamAudioSource) {
+      const { ok, data } = await safeFetchJson('/api/audio-sources');
+      if (ok && data && data.ok && Array.isArray(data.sources) && streamAudioSource) {
         const currentVal = streamAudioSource.value;
         streamAudioSource.innerHTML = data.sources.map(s => {
           const selected = s.id === currentVal ? 'selected' : (s.default && !currentVal ? 'selected' : '');
@@ -298,9 +307,8 @@ document.addEventListener('DOMContentLoaded', () => {
   // 8. Status Polling & UI Synchronization
   async function checkStatus() {
     try {
-      const res = await fetch('/api/status');
-      const data = await res.json();
-      if (!data.ok) return;
+      const { ok, data } = await safeFetchJson('/api/status');
+      if (!ok || !data || !data.ok) return;
 
       // A. TikTok Session Status
       const tt = data.tiktok;
@@ -407,9 +415,8 @@ document.addEventListener('DOMContentLoaded', () => {
   // 9. Fetch & Render Logs
   async function fetchLogs() {
     try {
-      const res = await fetch('/api/logs');
-      const data = await res.json();
-      if (data.ok && Array.isArray(data.logs)) {
+      const { ok, data } = await safeFetchJson('/api/logs');
+      if (ok && data && data.ok && Array.isArray(data.logs)) {
         if (logBadgeCount) {
           logBadgeCount.textContent = data.logs.length;
         }
@@ -466,7 +473,7 @@ document.addEventListener('DOMContentLoaded', () => {
     `;
 
     try {
-      const res = await fetch('/api/stream/start', {
+      const { data } = await safeFetchJson('/api/stream/start', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -481,9 +488,8 @@ document.addEventListener('DOMContentLoaded', () => {
         })
       });
 
-      const data = await res.json();
-      if (!data.ok) {
-        alert('Gagal memulai LIVE:\n' + (data.error || 'Terjadi kesalahan tidak dikenal'));
+      if (!data || !data.ok) {
+        alert('Gagal memulai LIVE:\n\n' + ((data && data.error) || 'Terjadi kesalahan tidak dikenal'));
         startStreamBtn.disabled = false;
         startStreamBtn.innerHTML = `
           <i class="ti ti-rocket fs-2"></i>
@@ -524,8 +530,7 @@ document.addEventListener('DOMContentLoaded', () => {
     `;
 
     try {
-      const res = await fetch('/api/stream/stop', { method: 'POST' });
-      const data = await res.json();
+      const { data } = await safeFetchJson('/api/stream/stop', { method: 'POST' });
 
       isStreaming = false;
       startStreamBtn.classList.remove('d-none');
@@ -564,9 +569,8 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     try {
-      const res = await fetch('/api/stream/force-stop', { method: 'POST' });
-      const data = await res.json();
-      alert(data.message || 'Proses Force Stop berhasil dijalankan.');
+      const { data } = await safeFetchJson('/api/stream/force-stop', { method: 'POST' });
+      alert((data && data.message) || 'Proses Force Stop berhasil dijalankan.');
 
       isStreaming = false;
       startStreamBtn.classList.remove('d-none');
@@ -653,14 +657,13 @@ document.addEventListener('DOMContentLoaded', () => {
   // B. Load Layout from Server
   async function loadStudioLayout() {
     try {
-      const res = await fetch('/api/overlay/layout?_t=' + Date.now());
-      const data = await res.json();
-      if (data.ok && data.layout && Array.isArray(data.layout.elements)) {
+      const { ok, data } = await safeFetchJson('/api/overlay/layout?_t=' + Date.now());
+      if (ok && data && data.ok && data.layout && Array.isArray(data.layout.elements)) {
         currentLayout = data.layout;
         renderStudioCanvas();
       }
     } catch (e) {
-      console.error('Failed to load overlay layout:', e);
+      console.warn('Notice loading overlay layout:', e);
     }
   }
 
@@ -1014,13 +1017,12 @@ document.addEventListener('DOMContentLoaded', () => {
     btnSaveLayout.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Menyimpan...';
 
     try {
-      const res = await fetch('/api/overlay/layout', {
+      const { ok, data } = await safeFetchJson('/api/overlay/layout', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(currentLayout)
       });
-      const data = await res.json();
-      if (data.ok) {
+      if (ok && data && data.ok) {
         notifyOverlayChannel();
         btnSaveLayout.className = 'btn btn-sm btn-success';
         btnSaveLayout.innerHTML = '<i class="ti ti-check me-1"></i> Tersimpan!';
@@ -1030,7 +1032,7 @@ document.addEventListener('DOMContentLoaded', () => {
           btnSaveLayout.disabled = false;
         }, 2000);
       } else {
-        alert('Gagal menyimpan layout: ' + (data.error || 'Terjadi kesalahan'));
+        alert('Gagal menyimpan layout: ' + ((data && data.error) || 'Terjadi kesalahan'));
         btnSaveLayout.disabled = false;
         btnSaveLayout.innerHTML = '<i class="ti ti-device-floppy me-1"></i> Simpan';
       }
@@ -1047,9 +1049,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     btnResetLayout.disabled = true;
     try {
-      const res = await fetch('/api/overlay/reset', { method: 'POST' });
-      const data = await res.json();
-      if (data.ok && data.layout) {
+      const { ok, data } = await safeFetchJson('/api/overlay/reset', { method: 'POST' });
+      if (ok && data && data.ok && data.layout) {
         currentLayout = data.layout;
         deselectAllElements();
         renderStudioCanvas();

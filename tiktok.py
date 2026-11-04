@@ -78,7 +78,10 @@ def _chromium_decrypt(enc, name, strip_hash):
     if not 1 <= out[-1] <= 16:
         return None
     out = out[:-out[-1]]
-    return (out[32:] if strip_hash else out).decode()
+    try:
+        return (out[32:] if strip_hash else out).decode("utf-8", errors="ignore")
+    except Exception:
+        return None
 
 def _chromium_rows(db, name):
     rows, meta = _copy_query(db, ["select host_key,name,value,encrypted_value,path,is_secure,expires_utc from cookies "
@@ -97,50 +100,110 @@ def _chromium_rows(db, name):
 
 def _candidate_homes():
     homes = [Path.home()]
-    for p in [Path("/data/home"), Path("/home/user")] + list(Path("/home").glob("*")):
-        if p.is_dir() and p not in homes:
-            homes.append(p)
+    for candidate in [Path("/data/home"), Path("/home/user")]:
+        try:
+            if candidate.is_dir() and candidate not in homes:
+                homes.append(candidate)
+        except Exception:
+            pass
+    try:
+        home_dir = Path("/home")
+        if home_dir.is_dir():
+            for p in home_dir.glob("*"):
+                try:
+                    if p.is_dir() and p not in homes:
+                        homes.append(p)
+                except Exception:
+                    pass
+    except Exception:
+        pass
     return homes
 
 def _profiles():
     seen = set()
     for h in _candidate_homes():
-        for name, dirs in FIREFOX:
-            for d in dirs:
-                ff = h / d; c = configparser.RawConfigParser(); c.read(ff / "profiles.ini")
-                for sec in c.sections():
-                    if sec.startswith("Profile") and c[sec].get("Path"):
-                        p = Path(c[sec]["Path"]); p = ff / p if c[sec].get("IsRelative", "1") == "1" else p
-                        db = p / "cookies.sqlite"
-                        if db.exists() and db not in seen:
-                            seen.add(db)
-                            yield f"{name} ({p.name})", lambda db=db: _firefox_rows(db)
-        for name, kr, dirs in CHROMIUM:
-            for d in dirs:
-                for p in sorted((h / d).glob("*")):
-                    for db in (p / "Network/Cookies", p / "Cookies"):
-                        if db.is_file() and db not in seen:
-                            seen.add(db)
-                            yield f"{name} ({p.name})", lambda db=db, kr=kr: _chromium_rows(db, kr); break
+        # Firefox & forks
+        try:
+            for name, dirs in FIREFOX:
+                for d in dirs:
+                    try:
+                        ff = h / d
+                        if not ff.exists():
+                            continue
+                        c = configparser.RawConfigParser()
+                        c.read(ff / "profiles.ini")
+                        for sec in c.sections():
+                            if sec.startswith("Profile") and c[sec].get("Path"):
+                                p = Path(c[sec]["Path"])
+                                p = ff / p if c[sec].get("IsRelative", "1") == "1" else p
+                                db = p / "cookies.sqlite"
+                                if db.exists() and db not in seen:
+                                    seen.add(db)
+                                    yield f"{name} ({p.name})", lambda db=db: _firefox_rows(db)
+                    except Exception:
+                        continue
+        except Exception:
+            pass
+
+        # Chromium & forks
+        try:
+            for name, kr, dirs in CHROMIUM:
+                for d in dirs:
+                    try:
+                        base = h / d
+                        if not base.exists():
+                            continue
+                        for p in sorted(base.glob("*")):
+                            try:
+                                for db in (p / "Network/Cookies", p / "Cookies"):
+                                    if db.is_file() and db not in seen:
+                                        seen.add(db)
+                                        yield f"{name} ({p.name})", lambda db=db, kr=kr: _chromium_rows(db, kr)
+                                        break
+                            except Exception:
+                                continue
+                    except Exception:
+                        continue
+        except Exception:
+            pass
 
 def find_session():
     best = (0, None, [])
-    for label, load in _profiles():
-        try:
-            rows = load()
-        except Exception:
-            continue
-        exp = max((r[5] for r in rows if r[1] == "sessionid" and r[2]), default=0)
-        if exp > max(best[0], time.time()):
-            best = (exp, label, rows)
+    try:
+        for label, load in _profiles():
+            try:
+                rows = load()
+            except Exception:
+                continue
+            # Support both sessionid and sessionid_ss
+            exp = max((r[5] for r in rows if r[1] in ("sessionid", "sessionid_ss") and r[2]), default=0)
+            if exp > max(best[0], time.time()):
+                best = (exp, label, rows)
+    except Exception:
+        pass
     return best[1], best[2]
 
 def session_status():
-    label, rows = find_session()
-    if not label:
-        return {"ok": False, "browser": None, "expires": None}
-    exp = max(r[5] for r in rows if r[1] == "sessionid")
-    return {"ok": True, "browser": label, "expires": time.strftime("%d/%m/%Y", time.localtime(exp))}
+    try:
+        label, rows = find_session()
+        if not label or not rows:
+            return {"ok": False, "browser": None, "expires": None}
+        
+        session_rows = [r for r in rows if r[1] in ("sessionid", "sessionid_ss") and r[2]]
+        if not session_rows:
+            return {"ok": False, "browser": label, "expires": None}
+
+        exp = max((r[5] for r in session_rows), default=0)
+        expires_str = "Sesi Aktif"
+        if exp > time.time():
+            try:
+                expires_str = time.strftime("%d/%m/%Y", time.localtime(exp))
+            except Exception:
+                expires_str = "Sesi Aktif"
+
+        return {"ok": True, "browser": label, "expires": expires_str}
+    except Exception as e:
+        return {"ok": False, "browser": None, "expires": None, "error": str(e)}
 
 API = "https://webcast.tiktok.com/webcast/"
 WEB = {"aid": "1988", "app_name": "tiktok_web", "device_platform": "web", "channel": "web"}
