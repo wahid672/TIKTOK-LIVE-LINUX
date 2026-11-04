@@ -444,6 +444,10 @@
       clockInterval = setInterval(updateClock, 1000);
     }
 
+    // Immediate synchronous render of default elements so screen is never blank/black
+    renderLayout(DEFAULT_LAYOUT);
+
+    // Initial fetch to load saved studio layout & custom text
     fetchLayout();
     setInterval(fetchLayout, 3000);
   </script>

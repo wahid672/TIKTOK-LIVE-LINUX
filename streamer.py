@@ -199,17 +199,13 @@ class Streamer:
             self.engine = "gstreamer"
 
         # 1. Clean up old locks & start dedicated vertical virtual display (Xvfb :99)
-        # Added MIT-SHM & Composite extensions for fast shared-memory frame transfer
         self._cleanup_locks()
-        self.log_cb(f"Memulai virtual display {VIRTUAL_DISPLAY} ({self.width}x{self.height}) dengan ekstensi MIT-SHM...")
+        self.log_cb(f"Memulai virtual display {VIRTUAL_DISPLAY} ({self.width}x{self.height})...")
         try:
             xvfb_cmd = [
                 "Xvfb", VIRTUAL_DISPLAY,
                 "-screen", "0", f"{self.width}x{self.height}x24",
                 "-ac",
-                "+extension", "RANDR",
-                "+extension", "GLX",
-                "+extension", "Composite",
                 "-nocursor"
             ]
             self.xvfb_proc = subprocess.Popen(xvfb_cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -225,12 +221,22 @@ class Streamer:
         except Exception:
             pass
 
-        # Chrome flags tuned for 24/7 non-stop streaming:
+        # Detect Chrome / Chromium binary
+        browser_bin = (
+            shutil.which("google-chrome") or
+            shutil.which("google-chrome-stable") or
+            shutil.which("chromium-browser") or
+            shutil.which("chromium") or
+            "google-chrome"
+        )
+
+        # Chrome flags tuned for clean rendering & 24/7 non-stop streaming:
         # - Disables background throttling so requestAnimationFrame and timers never drop frames
+        # - Disables GPU hardware acceleration on Xvfb to prevent black frame surfaces
         # - Disables /dev/shm usage to avoid shared memory exhaustion after hours
         # - Disables disk/GPU shader caching to eliminate disk inflation
         chrome_cmd = [
-            "google-chrome",
+            browser_bin,
             "--kiosk",
             f"--window-size={self.width},{self.height}",
             "--window-position=0,0",
@@ -247,29 +253,30 @@ class Streamer:
             "--disable-session-crashed-bubble",
             "--disable-component-update",
             "--force-device-scale-factor=1",
-            "--disk-cache-size=1",
-            "--media-cache-size=1",
-            "--disable-application-cache",
-            "--disable-gpu-program-cache",
-            "--disable-gpu-shader-disk-cache",
-            # Long-run anti-throttling & memory protection:
+            "--no-sandbox",
+            "--test-type",
+            "--disable-gpu",
+            "--disable-dev-shm-usage",
             "--disable-background-timer-throttling",
             "--disable-backgrounding-occluded-windows",
             "--disable-renderer-backgrounding",
-            "--disable-dev-shm-usage",
-            "--disable-breakpad",
-            "--disable-ipc-flooding-protection",
-            "--js-flags=--max-old-space-size=512",
+            "--disk-cache-size=1",
+            "--media-cache-size=1",
             overlay_url
         ]
 
-        self.log_cb(f"Rendering overlay ({overlay_url}) di {VIRTUAL_DISPLAY} mode kiosk...")
+        self.log_cb(f"Rendering overlay ({overlay_url}) menggunakan {browser_bin} di {VIRTUAL_DISPLAY}...")
         env = os.environ.copy()
         env["DISPLAY"] = VIRTUAL_DISPLAY
         _setup_pulse_env()
         try:
             self.chrome_proc = subprocess.Popen(chrome_cmd, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            time.sleep(3.5)  # Allow page to fully render
+            time.sleep(3.0)  # Allow page to fully render
+            if self.chrome_proc.poll() is not None:
+                self.stop()
+                err_msg = f"Browser overlay keluar mendadak (exit code {self.chrome_proc.returncode})"
+                self.log_cb(f"ERROR: {err_msg}")
+                return False, err_msg
         except Exception as e:
             self.stop()
             self.log_cb(f"Failed to launch Chrome: {e}")
@@ -378,8 +385,8 @@ class Streamer:
             f'ximagesrc display-name={VIRTUAL_DISPLAY} show-pointer=false use-damage=0 ! '
             f'videoconvert ! videoscale ! videorate ! video/x-raw,format=I420,width={self.width},height={self.height},framerate={self.fps}/1 ! '
             f'queue max-size-buffers=2 max-size-time=0 max-size-bytes=0 leaky=downstream ! '
-            f'x264enc bitrate={self.bitrate} speed-preset=ultrafast tune=zerolatency bframes=0 key-int-max={2 * self.fps} threads=4 sliced-threads=true ! '
-            f'video/x-h264,profile=main ! h264parse config-interval=1 ! queue max-size-buffers=200 max-size-time=2000000000 max-size-bytes=0 ! mux.video '
+            f'x264enc bitrate={self.bitrate} speed-preset=ultrafast tune=zerolatency bframes=0 key-int-max={2 * self.fps} ! '
+            f'h264parse config-interval=1 ! queue max-size-buffers=200 max-size-time=2000000000 max-size-bytes=0 ! mux.video '
             f'pulsesrc device="{audio_dev}" provide-clock=true buffer-time=100000 latency-time=10000 ! '
             f'audioconvert ! audioresample quality=4 ! audiorate tolerance=40000000 ! audio/x-raw,rate=48000,channels=2 ! '
             f'audioconvert ! avenc_aac bitrate=160000 ! aacparse ! queue max-size-buffers=200 max-size-time=2000000000 max-size-bytes=0 ! mux.audio'
@@ -387,6 +394,11 @@ class Streamer:
 
         try:
             self.pipe = Gst.parse_launch(pipe_desc)
+            # Use monotonic system clock to avoid pipeline stalls
+            try:
+                self.pipe.use_clock(Gst.SystemClock.obtain())
+            except Exception:
+                pass
             bus = self.pipe.get_bus()
             bus.add_signal_watch()
             bus.connect("message", self._on_bus_message)
